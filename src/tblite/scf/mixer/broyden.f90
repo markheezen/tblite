@@ -22,6 +22,7 @@ module tblite_scf_mixer_broyden
    use mctc_env, only : wp, error_type, fatal_error
    use tblite_lapack, only : getrf, getrs
    use tblite_scf_mixer_type, only : mixer_type
+   use iso_c_binding
    implicit none
    private
 
@@ -65,6 +66,33 @@ module tblite_scf_mixer_broyden
       !> Get error metric from mixing
       procedure :: get_error
    end type broyden_mixer
+
+   interface
+   subroutine c_broyden(n,iter,memory,q,qlast,dq,dqlast,df,u,a,omega,alpha) bind(C, name="c_broyden")
+      use iso_c_binding
+      implicit none
+      integer(c_int), value :: n
+      integer(c_int), value :: iter
+      integer(c_int), value :: memory
+      real(c_double) :: q(*)
+      real(c_double) :: qlast(*)
+      real(c_double) :: dq(*)
+      real(c_double)  :: dqlast(*)
+      real(c_double) :: df(*)
+      real(c_double) :: u(*)
+      real(c_double) :: a(*)
+      real(c_double) :: omega(*)
+      real(c_double), value :: alpha
+   end subroutine
+   pure subroutine c_get_error(n,dq,error) bind(C, name="c_get_broyden_error")
+      use iso_c_binding
+      implicit none
+      integer(c_int), value, intent(in) :: n
+      real(c_double), intent(in) :: dq(*)
+      real(c_double), intent(out) :: error
+   end subroutine
+
+end interface
 
 contains
 
@@ -128,11 +156,16 @@ subroutine next(self, error)
    self%idif = 0
    self%iget = 0
    self%iter = self%iter + 1
-   call broyden(self%ndim, self%q_in, self%qlast_in, self%dq, self%dqlast, &
-      & self%iter, self%memory, self%damp, self%omega, self%df, self%u, self%a, info)
-   if (info /= 0) then
-      call fatal_error(error, "Broyden mixing failed to obtain next iteration")
+
+   if (self%iter == 1) then
+      self%dqlast(:) = self%dq
+      self%qlast_in(:) = self%q_in
+      self%q_in(:) = self%q_in + self%damp * self%dq
+      return
    end if
+
+   call c_broyden(self%ndim,self%iter,self%memory,self%q_in,self%qlast_in,self%dq,self%dqlast,self%df,self%u,self%a,self%omega,self%damp)
+
 end subroutine next
 
 !> Get density as 1D array
@@ -145,125 +178,16 @@ subroutine get_1d(self, qvec)
    self%iget = self%iget + size(qvec)
 end subroutine get_1d
 
-subroutine broyden(n, q, qlast, dq, dqlast, iter, memory, alpha, omega, df, u, a, info)
-   integer, intent(in) :: n
-   integer, intent(in) :: iter
-   integer, intent(in) :: memory
-   real(wp), intent(inout) :: q(n)
-   real(wp), intent(inout) :: qlast(n)
-   real(wp), intent(in) :: dq(n)
-   real(wp), intent(inout) :: dqlast(n)
-   real(wp), intent(inout) :: df(n, memory)
-   real(wp), intent(inout) :: u(n, memory)
-   real(wp), intent(inout) :: a(memory, memory)
-   real(wp), intent(inout) :: omega(memory)
-   real(wp), intent(in) :: alpha
-   integer, intent(out) :: info
-
-   real(wp), allocatable :: beta(:,:), c(:, :)
-   integer :: i, j, it1, itn
-   real(wp) :: inv, omega0, minw, maxw, wfac
-
-   info = 0
-   itn = iter - 1
-   it1 = mod(itn - 1, memory) + 1
-
-   ! set parameters
-   ! alpha = 0.25d0
-   omega0 = 0.01d0
-   minw = 1.0d0
-   maxw = 100000.0d0
-   wfac = 0.01d0
-   ! wfac = 0.05d0
-
-   ! if case for first iteration: simple damping
-   if (iter == 1) then
-      dqlast(:) = dq
-      qlast(:) = q
-      q(:) = q + alpha * dq
-      return
-   end if
-
-   allocate(beta(min(memory, itn), min(memory, itn)), c(min(memory, itn), 1))
-
-   ! create omega (weight) for the current iteration
-   omega(it1) = sqrt(dot_product(dq, dq))
-   if (omega(it1) > (wfac / maxw)) then
-      omega(it1) = wfac / omega(it1)
-   else
-      omega(it1) = maxw
-   end if
-   if (omega(it1) < minw) then
-      omega(it1) = minw
-   end if
-
-   ! Build dF(iter-1)
-   df(:, it1) = dq - dqlast
-   inv = max(sqrt(dot_product(df(:, it1), df(:, it1))), epsilon(1.0_wp))
-   inv = 1.0_wp / inv
-   df(:, it1) = inv*df(:, it1)
-
-   ! Next: build a, beta, c, gamma
-   do j = max(1, itn - memory + 1), itn
-      i = mod(j - 1, memory) + 1
-      a(i, it1) = dot_product(df(:, i), df(:, it1))
-      a(it1, i) = a(i, it1)
-      c(i, 1) = omega(i) * dot_product(df(:, i), dq)
-   end do
-
-   ! Build beta from a and omega
-   do j = max(1, itn - memory + 1), itn
-      i = mod(j - 1, memory) + 1
-      beta(:it1, i) = omega(:it1) * omega(i) * a(:it1, i)
-      beta(i, i) = beta(i, i) + omega0*omega0
-   end do
-
-   ! build beta^-1
-   call lineq(beta, c, info)
-   if (info /= 0) return
-
-   ! Build |u>
-   u(:, it1) = alpha * df(:, it1) + inv * (q-qlast) !!!
-
-   ! save charges and deltas
-   dqlast(:) = dq
-   qlast(:) = q
-
-   ! calculate new charges
-   q(:) = q + alpha * dq
-
-   do j = max(1, itn - memory + 1), itn
-      i = mod(j - 1, memory) + 1
-      q(:) = q - omega(i) * c(i, 1) * u(:, i)
-   end do
-
-end subroutine broyden
-
-subroutine lineq(a, c, info)
-   real(wp), intent(inout) :: a(:, :)
-   real(wp), intent(inout) :: c(:, :)
-   integer, intent(out) :: info
-
-   integer, allocatable :: ipiv(:)
-
-   allocate(ipiv(size(a, 1)))
-   ! LU decomoposition of a general matrix
-   call getrf(a, ipiv, info)
-   if (info == 0) then
-      ! generate inverse of a matrix given its LU decomposition
-      call getrs(a, c, ipiv, info, trans="t")
-   endif
-end subroutine lineq
-
 pure function get_error(self) result(error)
    class(broyden_mixer), intent(in) :: self
    real(wp) :: error
-   integer :: i
-   error = 0.0_wp
-   do i = 1, size(self%dq)
-      error = error + self%dq(i)**2 / size(self%dq)
-   end do
-   error = sqrt(error)
+   ! integer :: i
+   ! error = 0.0_wp
+   ! do i = 1, size(self%dq)
+   !    error = error + self%dq(i)**2 / size(self%dq)
+   ! end do
+   ! error = sqrt(error)
+   call c_get_error(self%ndim,self%dq,error)
 end function get_error
 
 end module tblite_scf_mixer_broyden

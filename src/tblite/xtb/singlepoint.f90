@@ -37,7 +37,7 @@ module tblite_xtb_singlepoint
       & get_mixer_dimension, potential_type, new_potential
    use tblite_scf_solver, only : solver_type
    use tblite_timer, only : timer_type, format_time
-   use tblite_wavefunction, only : wavefunction_type, &
+   use tblite_wavefunction, only : wavefunction_type, get_density_matrix, &
       & get_alpha_beta_occupation, &
       & magnet_to_updown, updown_to_magnet
    use tblite_xtb_calculator, only : xtb_calculator
@@ -99,6 +99,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), dEdcn(:)
    real(wp), allocatable :: selfenergy(:), dsedcn(:), lattr(:, :), wdensity(:, :, :)
    type(integral_type) :: ints
+   real(wp), allocatable :: tmp(:)
    type(potential_type) :: pot
    type(container_cache), allocatable :: ccache, dcache, icache, hcache, rcache
    class(mixer_type), allocatable :: mixer
@@ -284,6 +285,9 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       call ctx%message("")
    end if
 
+   call ctx%delete_solver(solver)
+   if (ctx%failed()) return
+
    if (grad) then
       if (allocated(calc%coulomb)) then
          call timer%push("coulomb")
@@ -306,8 +310,12 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       call timer%push("hamiltonian")
       allocate(dEdcn(mol%nat))
       dEdcn(:) = 0.0_wp
+
       allocate(wdensity(calc%bas%nao, calc%bas%nao, wfn%nspin))
-      call solver%get_energy_w_density_matrix(wfn, wdensity)      
+      do spin = 1, wfn%nspin
+         tmp = wfn%focc(:, spin) * wfn%emo(:, spin)
+         call get_density_matrix(tmp, wfn%coeff(:, :, spin), wdensity(:, :, spin))
+      end do
       call updown_to_magnet(wfn%density)
       call updown_to_magnet(wdensity)
       call get_hamiltonian_gradient(mol, lattr, list, calc%bas, calc%h0, selfenergy, &
@@ -322,10 +330,6 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       end if
       call timer%pop
    end if
-
-   call ctx%delete_solver(solver)
-   if (ctx%failed()) return
-
    if (present(post_process)) then
       call timer%push("post processing")
       call collect_containers_caches(rcache, ccache, hcache, dcache, icache, calc, cache_list)
@@ -373,6 +377,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       call fatal_error(error, "SCF not converged in "//format_string(iscf, '(i0)')//" cycles")
       call ctx%set_error(error)
    end if
+
 
 end subroutine xtb_singlepoint
 

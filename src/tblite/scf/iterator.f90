@@ -25,7 +25,7 @@ module tblite_scf_iterator
    use tblite_container, only : container_cache, container_list
    use tblite_disp, only : dispersion_type
    use tblite_integral_type, only : integral_type
-   use tblite_wavefunction_type, only : wavefunction_type
+   use tblite_wavefunction_type, only : wavefunction_type, get_density_matrix
    use tblite_wavefunction_fermi, only : get_fermi_filling
    use tblite_wavefunction_mulliken, only : get_mulliken_shell_charges, &
       & get_mulliken_atomic_multipoles
@@ -34,8 +34,6 @@ module tblite_scf_iterator
    use tblite_scf_info, only : scf_info
    use tblite_scf_potential, only : potential_type, add_pot_to_h1
    use tblite_scf_solver, only : solver_type
-   use tblite_purification_solver, only : purification_solver 
-   use tblite_timer, only : timer_type, format_time
    implicit none
    private
 
@@ -87,7 +85,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
 
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
-   
+
    if (iscf > 0) then
       call mixer%next(error)
       if (allocated(error)) return
@@ -304,32 +302,10 @@ subroutine get_density(wfn, solver, ints, ts, error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   real(wp) :: e_fermi = 0.0_wp, stmp(2)
+   real(wp) :: e_fermi, stmp(2)
    real(wp), allocatable :: focc(:)
    integer :: spin
-   ts = 0.0_wp
-   select type(solver)
-   type is (purification_solver)
-      if (solver%got_transform()) then
-         do spin = 1, size(wfn%coeff, dim=3)
-            call solver%purify_dp(wfn%coeff(:, : ,spin), ints%overlap, wfn%density(:, :, spin), sum(wfn%nel), error)
-         end do
-      else
-         call solver%solve(wfn%coeff(:, :, 1), ints%overlap, wfn%emo(:, 1), error)
-         if (allocated(error)) return
 
-         allocate(focc(size(wfn%focc, 1)))
-         wfn%focc(:, :) = 0.0_wp
-         do spin = 1, 2
-            call get_fermi_filling(wfn%nel(spin), wfn%kt, wfn%emo(:, 1), &
-               & wfn%homo(spin), focc, e_fermi)
-            call get_electronic_entropy(focc, wfn%kt, stmp(spin))
-            wfn%focc(:, 1) = wfn%focc(:, 1) + focc
-         end do
-         ts = sum(stmp)
-         call solver%get_density_matrix(wfn%focc(:, 1), wfn%coeff(:, :, 1), wfn%density(:, :, 1))
-      end if
-   class default
    select case(wfn%nspin)
    case default
       call solver%solve(wfn%coeff(:, :, 1), ints%overlap, wfn%emo(:, 1), error)
@@ -344,7 +320,8 @@ subroutine get_density(wfn, solver, ints, ts, error)
          wfn%focc(:, 1) = wfn%focc(:, 1) + focc
       end do
       ts = sum(stmp)
-      call solver%get_density_matrix(wfn%focc(:, 1), wfn%coeff(:, :, 1), wfn%density(:, :, 1))
+
+      call get_density_matrix(wfn%focc(:, 1), wfn%coeff(:, :, 1), wfn%density(:, :, 1))
    case(2)
       wfn%coeff = 2*wfn%coeff
       do spin = 1, 2
@@ -354,11 +331,10 @@ subroutine get_density(wfn, solver, ints, ts, error)
          call get_fermi_filling(wfn%nel(spin), wfn%kt, wfn%emo(:, spin), &
             & wfn%homo(spin), wfn%focc(:, spin), e_fermi)
          call get_electronic_entropy(wfn%focc(:, spin), wfn%kt, stmp(spin))
-         call solver%get_density_matrix(wfn%focc(:, spin), wfn%coeff(:, :, spin), &
+         call get_density_matrix(wfn%focc(:, spin), wfn%coeff(:, :, spin), &
             & wfn%density(:, :, spin))
       end do
       ts = sum(stmp)
-   end select
    end select
 end subroutine get_density
 

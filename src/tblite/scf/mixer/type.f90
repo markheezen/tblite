@@ -20,6 +20,7 @@
 !> Provides base class for electronic mixing routines
 module tblite_scf_mixer_type
    use mctc_env, only : error_type, wp
+   use iso_c_binding
    implicit none
    private
 
