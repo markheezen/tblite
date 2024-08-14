@@ -90,6 +90,8 @@ module tblite_cli
       integer(c_size_t) :: purification_precision_ = purification_precision%mixed
       !> Purification runmode
       integer(c_size_t) :: purification_runmode_ = purification_runmode%default
+      !> Type of mixer
+      integer, allocatable :: mixer
    end type run_config
 
    !> Configuration for evaluating tight binding model on input structure
@@ -415,6 +417,16 @@ subroutine get_run_arguments(config, list, start, error)
          call list%get(iarg, arg)
          allocate(config%max_iter)
          call get_argument_as_int(arg, config%max_iter, error)
+         if (allocated(error)) exit
+
+      case("--mixer")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         allocate(config%mixer)
+         call get_argument_as_int(arg, config%mixer, error)
+         if (config%mixer<0.or.config%mixer>1) then
+            call fatal_error(error,"Mixer must be either 0 (Broyden) or 1 (DIIS)")
+         end if
          if (allocated(error)) exit
 
       case("--solver")

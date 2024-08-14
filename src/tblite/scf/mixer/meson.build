@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with tblite.  If not, see <https://www.gnu.org/licenses/>.
 
-srcs += files(
-  'broyden.f90',
-  'type.f90',
-)
+# srcs += files(
+#  'broyden.f90',
+#  'type.f90',
+# )

@@ -30,21 +30,47 @@ module tblite_scf_iterator
    use tblite_wavefunction_mulliken, only : get_mulliken_shell_charges, &
       & get_mulliken_atomic_multipoles
    use tblite_xtb_coulomb, only : tb_coulomb
-   use tblite_scf_mixer, only : mixer_type
    use tblite_scf_info, only : scf_info
    use tblite_scf_potential, only : potential_type, add_pot_to_h1
    use tblite_scf_solver, only : solver_type
+   use tblite_scf_mixer, only : next_mixer
+   use iso_c_binding
    implicit none
    private
 
-   public :: next_scf, get_mixer_dimension, get_density, get_qat_from_qsh
+   public :: next_scf, get_density, get_qat_from_qsh
+
+   interface
+   subroutine get_broyden_data(mixer,target,size) bind(C,name="GetBroydenData")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      real(c_double), intent(inout) :: target(*)
+      integer(c_int), value, intent(in) :: size
+   end subroutine get_broyden_data
+
+   subroutine set_broyden_data(mixer,target,size) bind(C,name="SetBroydenData")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      real(c_double), intent(in) :: target(*)
+      integer(c_int), value, intent(in) :: size
+   end subroutine set_broyden_data
+
+   subroutine diff_broyden_data(mixer,target,size) bind(C,name="DiffBroydenData")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      real(c_double), intent(in) :: target(*)
+      integer(c_int), value, intent(in) :: size
+   end subroutine diff_broyden_data
+   end interface
+
 
 contains
 
 !> Evaluate self-consistent iteration for the density-dependent Hamiltonian
-subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
-      & interactions, ints, pot, cache, dcache, icache, &
+subroutine next_scf(iscf, mol, bas, wfn, solver, mixer_type, mixer, info, coulomb, &
+      & dispersion, interactions, ints, pot, cache, dcache, icache, &
       & energies, error)
+   use iso_c_binding
    !> Current iteration count
    integer, intent(inout) :: iscf
    !> Molecular structure data
@@ -55,8 +81,10 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    type(wavefunction_type), intent(inout) :: wfn
    !> Solver for the general eigenvalue problem
    class(solver_type), intent(inout) :: solver
-   !> Convergence accelerator
-   class(mixer_type), intent(inout) :: mixer
+   !> Convergence accelerator type
+   integer, intent(in) :: mixer_type
+   !> Convergence accelerator pointer
+   type(c_ptr), intent(inout) :: mixer
    !> Information on wavefunction data used to construct Hamiltonian
    type(scf_info), intent(in) :: info
    !> Container for coulombic interactions
@@ -87,9 +115,8 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp) :: ts
 
    if (iscf > 0) then
-      call mixer%next(error)
-      if (allocated(error)) return
-      call get_mixer(mixer, bas, wfn, info)
+      call next_mixer(mixer,mixer_type,iscf)
+      call get_mixer(mixer, mixer_type, bas, wfn, info)
    end if
 
    iscf = iscf + 1
@@ -105,7 +132,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-   call set_mixer(mixer, wfn, info)
+   call set_mixer(mixer, mixer_type, wfn, info)
 
    call get_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
@@ -119,7 +146,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   call diff_mixer(mixer, wfn, info)
+   call diff_mixer(mixer, mixer_type, wfn, info)
 
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)
@@ -187,108 +214,116 @@ subroutine get_qat_from_qsh(bas, qsh, qat)
    end do
 end subroutine get_qat_from_qsh
 
-
-function get_mixer_dimension(mol, bas, info) result(ndim)
+!> Set the vector to mix
+subroutine set_mixer(mixer, type, wfn, info)
    use tblite_scf_info, only : atom_resolved, shell_resolved
-   type(structure_type), intent(in) :: mol
-   type(basis_type), intent(in) :: bas
-   type(scf_info), intent(in) :: info
-   integer :: ndim
+   !> Pointer to the mixer
+   type(c_ptr), intent(in) :: mixer
+   !> Type of mixer to use (Broyden=0, DIIS=1)
+   integer, intent(in) :: type
+   !> Wavefunction data
+   type(wavefunction_type), intent(inout) :: wfn
+   !> Info data
+   type(scf_info) :: info
 
-   ndim = 0
+   select case(type)
+      case(0)
+         select case(info%charge)
+         case(atom_resolved)
+            call set_broyden_data(mixer, wfn%qat, size(wfn%qat))
+         case(shell_resolved)
+            call set_broyden_data(mixer, wfn%qsh, size(wfn%qsh))
+         end select
 
-   select case(info%charge)
-   case(atom_resolved)
-      ndim = ndim + mol%nat
-   case(shell_resolved)
-      ndim = ndim + bas%nsh
-   end select
+         select case(info%dipole)
+         case(atom_resolved)
+            call set_broyden_data(mixer, wfn%dpat, size(wfn%dpat))
+         end select
 
-   select case(info%dipole)
-   case(atom_resolved)
-      ndim = ndim + 3*mol%nat
-   end select
-
-   select case(info%quadrupole)
-   case(atom_resolved)
-      ndim = ndim + 6*mol%nat
-   end select
-end function get_mixer_dimension
-
-subroutine set_mixer(mixer, wfn, info)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
-   class(mixer_type), intent(inout) :: mixer
-   type(wavefunction_type), intent(in) :: wfn
-   type(scf_info), intent(in) :: info
-
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%set(wfn%qat)
-   case(shell_resolved)
-      call mixer%set(wfn%qsh)
-   end select
-
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%set(wfn%dpat)
-   end select
-
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%set(wfn%qpat)
+         select case(info%quadrupole)
+         case(atom_resolved)
+            call set_broyden_data(mixer, wfn%qpat, size(wfn%qpat))
+         end select
+      case(1)
+         write(*,*) "DIIS mixer"
+         stop
    end select
 end subroutine set_mixer
 
-subroutine diff_mixer(mixer, wfn, info)
+!> Get the differences of the mixed vector
+subroutine diff_mixer(mixer, type, wfn, info)
    use tblite_scf_info, only : atom_resolved, shell_resolved
-   class(mixer_type), intent(inout) :: mixer
-   type(wavefunction_type), intent(in) :: wfn
-   type(scf_info), intent(in) :: info
+   !> Pointer to the mixer
+   type(c_ptr), intent(in) :: mixer
+   !> Type of mixer to use (Broyden=0, DIIS=1)
+   integer, intent(in) :: type
+   !> Wavefunction data
+   type(wavefunction_type), intent(inout) :: wfn
+   !> Info data
+   type(scf_info) :: info
 
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%diff(wfn%qat)
-   case(shell_resolved)
-      call mixer%diff(wfn%qsh)
-   end select
+   select case(type)
+      case(0)
+         select case(info%charge)
+            case(atom_resolved)
+               call diff_broyden_data(mixer, wfn%qat, size(wfn%qat))
+            case(shell_resolved)
+               call diff_broyden_data(mixer, wfn%qsh, size(wfn%qsh))
+            end select
 
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%diff(wfn%dpat)
-   end select
+            select case(info%dipole)
+            case(atom_resolved)
+               call diff_broyden_data(mixer, wfn%dpat, size(wfn%dpat))
+            end select
 
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%diff(wfn%qpat)
+            select case(info%quadrupole)
+            case(atom_resolved)
+               call diff_broyden_data(mixer, wfn%qpat, size(wfn%qpat))
+         end select
+      case(1)
+         write(*,*) "DIIS mixer"
+         stop
    end select
 end subroutine diff_mixer
 
-subroutine get_mixer(mixer, bas, wfn, info)
+!> Get the mixed vector
+subroutine get_mixer(mixer, type, bas, wfn, info)
    use tblite_scf_info, only : atom_resolved, shell_resolved
-   class(mixer_type), intent(inout) :: mixer
+   !> Pointer to the mixer
+   type(c_ptr), intent(in) :: mixer
+   !> Type of mixer to use (Broyden=0, DIIS=1)
+   integer, intent(in) :: type
+   !> Basis functions data
    type(basis_type), intent(in) :: bas
+   !> Wavefunction data
    type(wavefunction_type), intent(inout) :: wfn
-   type(scf_info), intent(in) :: info
+   !> Info data
+   type(scf_info) :: info
 
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%get(wfn%qat)
-   case(shell_resolved)
-      call mixer%get(wfn%qsh)
-      call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
-   end select
+   select case(type)
+      case(0)
+         select case(info%charge)
+            case(atom_resolved)
+               call get_broyden_data(mixer, wfn%qat, size(wfn%qat))
+            case(shell_resolved)
+               call get_broyden_data(mixer, wfn%qsh, size(wfn%qsh))
+               call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
+            end select
 
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%get(wfn%dpat)
-   end select
+            select case(info%dipole)
+            case(atom_resolved)
+               call get_broyden_data(mixer, wfn%dpat, size(wfn%dpat))
+            end select
 
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%get(wfn%qpat)
+            select case(info%quadrupole)
+            case(atom_resolved)
+               call get_broyden_data(mixer, wfn%qpat, size(wfn%qpat))
+         end select
+      case(1)
+         write(*,*) "DIIS mixer"
+         stop
    end select
 end subroutine get_mixer
-
 
 subroutine get_density(wfn, solver, ints, ts, error)
    !> Tight-binding wavefunction data

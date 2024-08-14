@@ -63,8 +63,6 @@ module tblite_scf_mixer_broyden
       procedure :: diff_1d
       !> Get density as 1D array
       procedure :: get_1d
-      !> Get error metric from mixing
-      procedure :: get_error
    end type broyden_mixer
 
    interface
@@ -83,13 +81,6 @@ module tblite_scf_mixer_broyden
       real(c_double) :: a(*)
       real(c_double) :: omega(*)
       real(c_double), value :: alpha
-   end subroutine
-   pure subroutine c_get_error(n,dq,error) bind(C, name="c_get_broyden_error")
-      use iso_c_binding
-      implicit none
-      integer(c_int), value, intent(in) :: n
-      real(c_double), intent(in) :: dq(*)
-      real(c_double), intent(out) :: error
    end subroutine
 
 end interface
@@ -156,14 +147,6 @@ subroutine next(self, error)
    self%idif = 0
    self%iget = 0
    self%iter = self%iter + 1
-
-   if (self%iter == 1) then
-      self%dqlast(:) = self%dq
-      self%qlast_in(:) = self%q_in
-      self%q_in(:) = self%q_in + self%damp * self%dq
-      return
-   end if
-
    call c_broyden(self%ndim,self%iter,self%memory,self%q_in,self%qlast_in,self%dq,self%dqlast,self%df,self%u,self%a,self%omega,self%damp)
 
 end subroutine next
@@ -177,17 +160,5 @@ subroutine get_1d(self, qvec)
    qvec(:) = self%q_in(self%iget+1:self%iget+size(qvec))
    self%iget = self%iget + size(qvec)
 end subroutine get_1d
-
-pure function get_error(self) result(error)
-   class(broyden_mixer), intent(in) :: self
-   real(wp) :: error
-   ! integer :: i
-   ! error = 0.0_wp
-   ! do i = 1, size(self%dq)
-   !    error = error + self%dq(i)**2 / size(self%dq)
-   ! end do
-   ! error = sqrt(error)
-   call c_get_error(self%ndim,self%dq,error)
-end function get_error
 
 end module tblite_scf_mixer_broyden
