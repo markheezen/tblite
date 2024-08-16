@@ -38,6 +38,12 @@ module tblite_scf_mixer
          integer(c_int), value :: memory
          real(c_double), value :: alpha
       end function new_broyden
+      type(c_ptr) function new_diis(ndim, memory, alpha) bind(C,name="SetupDIIS")
+      use iso_c_binding
+      integer(c_int), value :: ndim
+      integer(c_int), value :: memory
+      real(c_double), value :: alpha
+   end function new_diis
    end interface
 
 contains
@@ -63,9 +69,7 @@ contains
        case(0)
          mixer = new_broyden(get_mixer_dimension(mol,calc%bas,info), calc%max_iter, calc%mixer_damping)
        case(1)
-         write(*,*) "DIIS mixer"
-         ! mixer = new_diis(10, calc%max_iter, calc%mixer_damping)
-         stop
+         mixer = new_diis(get_mixer_dimension(mol,calc%bas,info), calc%max_iter, calc%mixer_damping)
       end select
    end subroutine new_mixer
 

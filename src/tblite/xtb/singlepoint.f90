@@ -66,18 +66,27 @@ module tblite_xtb_singlepoint
       label_electronic = "electronic energy", &
       label_total = "total energy"
 
-   interface
-      real(c_double) function get_error(mixer) bind(C,name="GetError")
+   interface get_error
+      real function get_error_sp(mixer,dummy) bind(C,name="GetErrorDP")
          use iso_c_binding
+         use mctc_env, only : sp
          type(c_ptr), value :: mixer
-      end function get_error
+         real(sp), intent(in) :: dummy
+      end function get_error_sp
 
+      double precision function get_error_dp(mixer,dummy) bind(C,name="GetErrorDP")
+         use iso_c_binding
+         use mctc_env, only : dp
+         type(c_ptr), value :: mixer
+         real(dp), intent(in) :: dummy
+      end function get_error_dp
+   end interface
+   interface
       subroutine destroy_mixer(mixer) bind(C,name="Destroy")
          use iso_c_binding
          type(c_ptr), value :: mixer
       end subroutine destroy_mixer
    end interface
-
 
 contains
 
@@ -109,7 +118,7 @@ contains
 
       logical :: grad, converged, econverged, pconverged
       integer :: prlevel
-      real(wp) :: econv, pconv, cutoff, elast, nel
+      real(wp) :: econv, pconv, cutoff, elast, nel, err
       real(wp), allocatable :: energies(:), edisp(:), erep(:), exbond(:), eint(:), eelec(:)
       real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), dEdcn(:)
       real(wp), allocatable :: selfenergy(:), dsedcn(:), lattr(:, :), wdensity(:, :, :)
@@ -268,7 +277,7 @@ contains
          & info, calc%coulomb, calc%dispersion, calc%interactions, ints, pot, &
          & ccache, dcache, icache, eelec, error)
          econverged = abs(sum(eelec) - elast) < econv
-         pconverged = get_error(mixer) < pconv
+         pconverged = get_error(mixer,err) < pconv
          converged = econverged .and. pconverged
          if (prlevel > 0) then
             call ctx%message(format_string(iscf, "(i7)") // &
@@ -276,7 +285,7 @@ contains
             & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
             & format_string(sum(eelec) - elast, "(es16.7)") // &
             & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
-            & format_string(get_error(mixer), "(es16.7)") // &
+            & format_string(get_error(mixer,err), "(es16.7)") // &
             & escape(ctx%terminal%reset))
          end if
          if (allocated(error)) then

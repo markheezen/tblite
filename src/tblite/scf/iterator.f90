@@ -250,8 +250,22 @@ contains
             call set_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
          end select
        case(1)
-         write(*,*) "DIIS mixer"
-         stop
+         select case(info%charge)
+         case(atom_resolved)
+           call set_mixer_data(mixer, wfn%qat, size(wfn%qat))
+         case(shell_resolved)
+           call set_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
+        end select
+
+        select case(info%dipole)
+         case(atom_resolved)
+           call set_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
+        end select
+
+        select case(info%quadrupole)
+         case(atom_resolved)
+           call set_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
+        end select
       end select
    end subroutine set_mixer
 
@@ -286,8 +300,22 @@ contains
             call diff_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
          end select
        case(1)
-         write(*,*) "DIIS mixer"
-         stop
+         select case(info%charge)
+         case(atom_resolved)
+           call diff_mixer_data(mixer, wfn%qat, size(wfn%qat))
+         case(shell_resolved)
+           call diff_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
+        end select
+
+        select case(info%dipole)
+         case(atom_resolved)
+           call diff_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
+        end select
+
+        select case(info%quadrupole)
+         case(atom_resolved)
+           call diff_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
+        end select
       end select
    end subroutine diff_mixer
 
@@ -325,8 +353,23 @@ contains
             call get_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
          end select
        case(1)
-         write(*,*) "DIIS mixer"
-         stop
+         select case(info%charge)
+         case(atom_resolved)
+           call get_mixer_data(mixer, wfn%qat, size(wfn%qat))
+         case(shell_resolved)
+           call get_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
+           call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
+        end select
+
+        select case(info%dipole)
+         case(atom_resolved)
+           call get_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
+        end select
+
+        select case(info%quadrupole)
+         case(atom_resolved)
+           call get_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
+        end select
       end select
    end subroutine get_mixer
 
