@@ -28,28 +28,33 @@ module tblite_scf_mixer
    use tblite_wavefunction, only : wavefunction_type
    use mctc_io, only : structure_type
    use tblite_scf_info, only : scf_info
+   use tblite_integral_type, only : integral_type
    use iso_c_binding
    implicit none
 
    interface
-      type(c_ptr) function new_broyden(ndim, memory, alpha) bind(C,name="SetupBroyden")
+      type(c_ptr) function new_broyden(ndim, memory, alpha, nao) bind(C,name="SetupBroyden")
          use iso_c_binding
+         use mctc_env, only : wp
          integer(c_int), value :: ndim
          integer(c_int), value :: memory
-         real(c_double), value :: alpha
+         real(wp), value :: alpha
+         integer(c_int), value :: nao
       end function new_broyden
-      type(c_ptr) function new_diis(ndim, memory, alpha) bind(C,name="SetupDIIS")
-      use iso_c_binding
-      integer(c_int), value :: ndim
-      integer(c_int), value :: memory
-      real(c_double), value :: alpha
-   end function new_diis
+      type(c_ptr) function new_diis(ndim, memory, alpha, nao) bind(C,name="SetupDIIS")
+         use iso_c_binding
+         use mctc_env, only : wp
+         integer(c_int), value :: ndim
+         integer(c_int), value :: memory
+         real(wp), value :: alpha
+         integer(c_int), value :: nao
+      end function new_diis
    end interface
 
 contains
 
 !> Create a new instance of the mixer
-   subroutine new_mixer(mixer, type, mol, calc, wfn, info)
+   subroutine new_mixer(mixer, type, mol, calc, info)
       !> Pointer to the mixer on exit
       type(c_ptr), intent(out) :: mixer
       !> Type of mixer to use (Broyden=0, DIIS=1)
@@ -58,8 +63,6 @@ contains
       type(structure_type), intent(in) :: mol
       !> Single-point calculator
       type(xtb_calculator), intent(in) :: calc
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
       !> Info data
       type(scf_info) :: info
 
@@ -67,9 +70,9 @@ contains
 
       select case(type)
        case(0)
-         mixer = new_broyden(get_mixer_dimension(mol,calc%bas,info), calc%max_iter, calc%mixer_damping)
+         mixer = new_broyden(get_mixer_dimension(mol,calc%bas,info), calc%max_iter, calc%mixer_damping, calc%bas%nao)
        case(1)
-         mixer = new_diis(get_mixer_dimension(mol,calc%bas,info), calc%max_iter, calc%mixer_damping)
+         mixer = new_diis(get_mixer_dimension(mol,calc%bas,info), 10, calc%mixer_damping, calc%bas%nao)
       end select
    end subroutine new_mixer
 

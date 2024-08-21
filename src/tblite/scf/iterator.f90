@@ -42,22 +42,25 @@ module tblite_scf_iterator
    interface
       subroutine get_mixer_data(mixer,target,size) bind(C,name="GetData")
          use iso_c_binding
+         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-         real(c_double), intent(inout) :: target(*)
+         real(wp), intent(inout) :: target(*)
          integer(c_int), value, intent(in) :: size
       end subroutine get_mixer_data
 
       subroutine set_mixer_data(mixer,target,size) bind(C,name="SetData")
          use iso_c_binding
+         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-         real(c_double), intent(in) :: target(*)
+         real(wp), intent(in) :: target(*)
          integer(c_int), value, intent(in) :: size
       end subroutine set_mixer_data
 
       subroutine diff_mixer_data(mixer,target,size) bind(C,name="DiffData")
          use iso_c_binding
+         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-         real(c_double), intent(in) :: target(*)
+         real(wp), intent(in) :: target(*)
          integer(c_int), value, intent(in) :: size
       end subroutine diff_mixer_data
 
@@ -66,6 +69,15 @@ module tblite_scf_iterator
          type(c_ptr), value, intent(in) :: mixer
          integer(c_int), value, intent(in) :: iter
       end subroutine next_mixer
+
+      subroutine copy_matrices(mixer,fock,density,overlap) bind(C,name="CopyMatrices")
+         use iso_c_binding
+         use mctc_env, only : wp
+         type(c_ptr), value, intent(in) :: mixer
+         real(wp), intent(in) :: fock(*)
+         real(wp), intent(in) :: density(*)
+         real(wp), intent(in) :: overlap(*)
+      end subroutine copy_matrices
    end interface
 
 
@@ -120,7 +132,7 @@ contains
       real(wp) :: ts
 
       if (iscf > 0) then
-         call next_mixer(mixer,iscf)
+         call next_mixer(mixer, iscf)
          call get_mixer(mixer, mixer_type, bas, wfn, info)
       end if
 
@@ -137,7 +149,7 @@ contains
       end if
       call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-      call set_mixer(mixer, mixer_type, wfn, info)
+      call set_mixer(mixer, mixer_type, wfn, info, ints)
 
       call get_density(wfn, solver, ints, ts, error)
       if (allocated(error)) return
@@ -220,7 +232,7 @@ contains
    end subroutine get_qat_from_qsh
 
 !> Set the vector to mix
-   subroutine set_mixer(mixer, type, wfn, info)
+   subroutine set_mixer(mixer, type, wfn, info, ints)
       use tblite_scf_info, only : atom_resolved, shell_resolved
       !> Pointer to the mixer
       type(c_ptr), intent(in) :: mixer
@@ -230,9 +242,9 @@ contains
       type(wavefunction_type), intent(inout) :: wfn
       !> Info data
       type(scf_info) :: info
+      !> Integral container
+      type(integral_type), intent(in) :: ints
 
-      select case(type)
-       case(0)
          select case(info%charge)
           case(atom_resolved)
             call set_mixer_data(mixer, wfn%qat, size(wfn%qat))
@@ -249,23 +261,12 @@ contains
           case(atom_resolved)
             call set_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
          end select
-       case(1)
-         select case(info%charge)
-         case(atom_resolved)
-           call set_mixer_data(mixer, wfn%qat, size(wfn%qat))
-         case(shell_resolved)
-           call set_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
-        end select
-
-        select case(info%dipole)
-         case(atom_resolved)
-           call set_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
-        end select
-
-        select case(info%quadrupole)
-         case(atom_resolved)
-           call set_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
-        end select
+       
+      select case(type)
+      case(1)
+         call copy_matrices(mixer,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
+      case default
+         continue
       end select
    end subroutine set_mixer
 
@@ -281,41 +282,21 @@ contains
       !> Info data
       type(scf_info) :: info
 
-      select case(type)
-       case(0)
-         select case(info%charge)
-          case(atom_resolved)
-            call diff_mixer_data(mixer, wfn%qat, size(wfn%qat))
-          case(shell_resolved)
-            call diff_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
-         end select
-
-         select case(info%dipole)
-          case(atom_resolved)
-            call diff_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
-         end select
-
-         select case(info%quadrupole)
-          case(atom_resolved)
-            call diff_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
-         end select
-       case(1)
-         select case(info%charge)
+      select case(info%charge)
          case(atom_resolved)
-           call diff_mixer_data(mixer, wfn%qat, size(wfn%qat))
+         call diff_mixer_data(mixer, wfn%qat, size(wfn%qat))
          case(shell_resolved)
-           call diff_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
-        end select
+         call diff_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
+      end select
 
-        select case(info%dipole)
+      select case(info%dipole)
          case(atom_resolved)
-           call diff_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
-        end select
+         call diff_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
+      end select
 
-        select case(info%quadrupole)
+      select case(info%quadrupole)
          case(atom_resolved)
-           call diff_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
-        end select
+         call diff_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
       end select
    end subroutine diff_mixer
 
@@ -333,43 +314,22 @@ contains
       !> Info data
       type(scf_info) :: info
 
-      select case(type)
-       case(0)
-         select case(info%charge)
-          case(atom_resolved)
-            call get_mixer_data(mixer, wfn%qat, size(wfn%qat))
-          case(shell_resolved)
-            call get_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
-            call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
-         end select
-
-         select case(info%dipole)
-          case(atom_resolved)
-            call get_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
-         end select
-
-         select case(info%quadrupole)
-          case(atom_resolved)
-            call get_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
-         end select
-       case(1)
-         select case(info%charge)
+      select case(info%charge)
          case(atom_resolved)
-           call get_mixer_data(mixer, wfn%qat, size(wfn%qat))
+         call get_mixer_data(mixer, wfn%qat, size(wfn%qat))
          case(shell_resolved)
-           call get_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
-           call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
-        end select
+         call get_mixer_data(mixer, wfn%qsh, size(wfn%qsh))
+         call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
+      end select
 
-        select case(info%dipole)
+      select case(info%dipole)
          case(atom_resolved)
-           call get_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
-        end select
+         call get_mixer_data(mixer, wfn%dpat, size(wfn%dpat))
+      end select
 
-        select case(info%quadrupole)
+      select case(info%quadrupole)
          case(atom_resolved)
-           call get_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
-        end select
+         call get_mixer_data(mixer, wfn%qpat, size(wfn%qpat))
       end select
    end subroutine get_mixer
 

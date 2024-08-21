@@ -67,18 +67,20 @@ module tblite_xtb_singlepoint
       label_total = "total energy"
 
    interface get_error
-      real function get_error_sp(mixer,dummy) bind(C,name="GetErrorDP")
+      real function get_error_sp(mixer,dummy,iter) bind(C,name="GetErrorDP")
          use iso_c_binding
          use mctc_env, only : sp
          type(c_ptr), value :: mixer
-         real(sp), intent(in) :: dummy
+         real(sp), value :: dummy
+         integer(c_int), value :: iter
       end function get_error_sp
 
-      double precision function get_error_dp(mixer,dummy) bind(C,name="GetErrorDP")
+      double precision function get_error_dp(mixer,dummy,iter) bind(C,name="GetErrorDP")
          use iso_c_binding
          use mctc_env, only : dp
          type(c_ptr), value :: mixer
-         real(dp), intent(in) :: dummy
+         real(dp), value :: dummy
+         integer(c_int), value :: iter
       end function get_error_dp
    end interface
    interface
@@ -264,7 +266,7 @@ contains
       converged = .false.
       info = calc%variable_info()
 
-      call new_mixer(mixer, calc%mixer_type, mol, calc, wfn, info)
+      call new_mixer(mixer, calc%mixer_type, mol, calc, info)
 
       if (prlevel > 0) then
          call ctx%message(repeat("-", 60))
@@ -277,7 +279,7 @@ contains
          & info, calc%coulomb, calc%dispersion, calc%interactions, ints, pot, &
          & ccache, dcache, icache, eelec, error)
          econverged = abs(sum(eelec) - elast) < econv
-         pconverged = get_error(mixer,err) < pconv
+         pconverged = abs(get_error(mixer,err,iscf)) < pconv
          converged = econverged .and. pconverged
          if (prlevel > 0) then
             call ctx%message(format_string(iscf, "(i7)") // &
@@ -285,7 +287,7 @@ contains
             & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
             & format_string(sum(eelec) - elast, "(es16.7)") // &
             & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
-            & format_string(get_error(mixer,err), "(es16.7)") // &
+            & format_string(get_error(mixer,err,iscf), "(es16.7)") // &
             & escape(ctx%terminal%reset))
          end if
          if (allocated(error)) then
