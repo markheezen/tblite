@@ -91,7 +91,9 @@ module tblite_cli
       !> Purification runmode
       integer(c_size_t) :: purification_runmode_ = purification_runmode%default
       !> Type of mixer
-      integer, allocatable :: mixer
+      integer, allocatable :: mixer(:)
+      !> Energy error to change mixer type
+      real(wp), allocatable :: mixer_change
    end type run_config
 
    !> Configuration for evaluating tight binding model on input structure
@@ -255,7 +257,7 @@ subroutine get_run_arguments(config, list, start, error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   integer :: iarg, narg
+   integer :: iarg, narg, i
    logical :: getopts
    character(len=:), allocatable :: arg
    logical :: alpb
@@ -422,11 +424,26 @@ subroutine get_run_arguments(config, list, start, error)
       case("--mixer")
          iarg = iarg + 1
          call list%get(iarg, arg)
-         allocate(config%mixer)
-         call get_argument_as_int(arg, config%mixer, error)
-         if (config%mixer<0.or.config%mixer>1) then
-            call fatal_error(error,"Mixer must be either 0 (Broyden) or 1 (DIIS)")
+         allocate(config%mixer(1))
+         call get_argument_as_intv(arg, config%mixer, error)
+         if (size(config%mixer) > 2) then
+            call fatal_error(error, "Only 2 different types of mixers are supported")
+         endif
+         do i = 1, size(config%mixer)
+            if (config%mixer(i) < 0 .or. config%mixer(i) > 1) then
+               call fatal_error(error,"Mixers must be either 0 (Broyden) or 1 (DIIS)")
+            end if
+         end do
+         if (allocated(error)) exit
+      
+      case("--mixchange")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         if (.not.allocated(config%mixer) .or. size(config%mixer) /= 2) then
+            call fatal_error(error,"Change of mixers may only be invoked when 2 mixers are specified")
          end if
+         allocate(config%mixer_change)
+         call get_argument_as_real(arg, config%mixer_change, error)
          if (allocated(error)) exit
 
       case("--solver")
@@ -1018,6 +1035,50 @@ subroutine get_argument_as_int(arg, val, error)
    end if
 
 end subroutine get_argument_as_int
+
+subroutine get_argument_as_intv(arg, val, error)
+   !> Index of command line argument, range [0:command_argument_count()]
+   character(len=:), intent(in), allocatable :: arg
+   !> Integer value
+   integer, allocatable, intent(inout) :: val(:)
+   !> Error handling
+   type(error_type), allocatable :: error
+
+   integer :: stat
+   integer :: i
+   integer :: length=0
+   character(len=*), parameter :: sep = ","
+   character(len=:), allocatable :: targ
+
+   if (.not.allocated(arg)) then
+      call fatal_error(error, "Cannot read real value, argument missing")
+      return
+   end if
+
+   do i = 1, len_trim(arg)
+      if (arg(i:i) == ',') then
+         length = length + 1
+      end if
+   end do
+
+   deallocate(val)
+   allocate(val(length+1))
+
+   allocate(character(len=len(arg)) :: targ)
+   do i = 1, len(arg)
+      if (arg(i:i) == sep) then
+         targ(i:i) = " "
+      else
+         targ(i:i) = arg(i:i)
+      end if
+   end do
+   read(targ, *, iostat=stat) val
+   if (stat /= 0) then
+      call fatal_error(error, "Cannot read real value from '"//arg//"'")
+      return
+   end if
+
+end subroutine get_argument_as_intv
 
 
 subroutine version(unit)

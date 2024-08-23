@@ -36,7 +36,10 @@ module tblite_xtb_singlepoint
    use tblite_scf, only : scf_info, next_scf, &
    & potential_type, new_potential
    use tblite_scf_solver, only : solver_type
-   use tblite_scf_mixer, only : new_mixer
+   use tblite_scf_mixer, only: mixer_type
+   use tblite_scf_mixers, only: mixers_type, destroy, setup
+   use tblite_scf_mixer_broyden, only: broyden_type, new_broyden
+   use tblite_scf_mixer_diis, only: diis_type, new_diis
    use tblite_timer, only : timer_type, format_time
    use tblite_wavefunction, only : wavefunction_type, get_density_matrix, &
    & get_alpha_beta_occupation, &
@@ -82,12 +85,6 @@ module tblite_xtb_singlepoint
          real(dp), value :: dummy
          integer(c_int), value :: iter
       end function get_error_dp
-   end interface
-   interface
-      subroutine destroy_mixer(mixer) bind(C,name="Destroy")
-         use iso_c_binding
-         type(c_ptr), value :: mixer
-      end subroutine destroy_mixer
    end interface
 
 contains
@@ -135,6 +132,7 @@ contains
       class(solver_type), allocatable :: solver
       type(adjacency_list) :: list
       type(container_cache), allocatable :: cache_list(:)
+      type(mixers_type) :: mixers
 
       integer :: iscf, spin
 
@@ -266,7 +264,7 @@ contains
       converged = .false.
       info = calc%variable_info()
 
-      call new_mixer(mixer, calc%mixer_type, mol, calc, info)
+      call mixers%setup(calc%mixer_type, mol, calc, info)
 
       if (prlevel > 0) then
          call ctx%message(repeat("-", 60))
@@ -275,11 +273,11 @@ contains
       end if
       do while(.not.converged .and. iscf < calc%max_iter)
          elast = sum(eelec)
-         call next_scf(iscf, mol, calc%bas, wfn, solver, calc%mixer_type, mixer, &
+         call next_scf(iscf, mol, calc%bas, wfn, solver, mixers, &
          & info, calc%coulomb, calc%dispersion, calc%interactions, ints, pot, &
          & ccache, dcache, icache, eelec, error)
          econverged = abs(sum(eelec) - elast) < econv
-         pconverged = abs(get_error(mixer,err,iscf)) < pconv
+         pconverged = abs(get_error(mixers%currptr,err,iscf)) < pconv
          converged = econverged .and. pconverged
          if (prlevel > 0) then
             call ctx%message(format_string(iscf, "(i7)") // &
@@ -287,15 +285,27 @@ contains
             & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
             & format_string(sum(eelec) - elast, "(es16.7)") // &
             & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
-            & format_string(get_error(mixer,err,iscf), "(es16.7)") // &
+            & format_string(get_error(mixers%currptr,err,iscf), "(es16.7)") // &
             & escape(ctx%terminal%reset))
          end if
+
+         if (mixers%change == .false. .and. abs(sum(eelec) - elast) < mixers%threshold) then
+            mixers%change = .true.
+            mixers%currmix = calc%mixer_type(2)
+            select case(calc%mixer_type(2))
+            case(0)
+               mixers%currptr = mixers%broyden%ptr
+            case(1)
+               mixers%currptr = mixers%diis%ptr
+            end select
+         end if
+
          if (allocated(error)) then
             call ctx%set_error(error)
             exit
          end if
       end do
-      call destroy_mixer(mixer)
+      call mixers%destroy
 
       if (prlevel > 0) then
          call ctx%message(repeat("-", 60))

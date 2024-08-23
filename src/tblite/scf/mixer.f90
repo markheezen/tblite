@@ -22,89 +22,91 @@
 
 !> Provides an electronic mixer implementation
 module tblite_scf_mixer
-   use mctc_env, only : wp
-   use tblite_basis_type, only : basis_type
    use tblite_xtb_calculator, only : xtb_calculator
-   use tblite_wavefunction, only : wavefunction_type
    use mctc_io, only : structure_type
    use tblite_scf_info, only : scf_info
    use tblite_integral_type, only : integral_type
+   use tblite_basis_type, only : basis_type
+   use tblite_xtb_calculator, only : xtb_calculator
+   use tblite_wavefunction, only : wavefunction_type
    use iso_c_binding
    implicit none
 
-   interface
-      type(c_ptr) function new_broyden(ndim, memory, alpha, nao) bind(C,name="SetupBroyden")
-         use iso_c_binding
-         use mctc_env, only : wp
-         integer(c_int), value :: ndim
-         integer(c_int), value :: memory
-         real(wp), value :: alpha
-         integer(c_int), value :: nao
-      end function new_broyden
-      type(c_ptr) function new_diis(ndim, memory, alpha, nao) bind(C,name="SetupDIIS")
-         use iso_c_binding
-         use mctc_env, only : wp
-         integer(c_int), value :: ndim
-         integer(c_int), value :: memory
-         real(wp), value :: alpha
-         integer(c_int), value :: nao
-      end function new_diis
-   end interface
 
-contains
 
-!> Create a new instance of the mixer
-   subroutine new_mixer(mixer, type, mol, calc, info)
-      !> Pointer to the mixer on exit
-      type(c_ptr), intent(out) :: mixer
-      !> Type of mixer to use (Broyden=0, DIIS=1)
-      integer, intent(in) :: type
-      !> Molecular structure data
-      type(structure_type), intent(in) :: mol
-      !> Single-point calculator
-      type(xtb_calculator), intent(in) :: calc
+   !> Electronic mixer
+   type, public, abstract :: mixer_type
+      integer :: ndim
+      integer :: memory
+      type(c_ptr) :: ptr
+   contains
+      !> Apply mixing to the density
+      procedure :: next
+      !> Set new object to mix
+      procedure(set), deferred :: set
+      !> Set difference between two consecutive objects to mix
+      procedure(diff), deferred :: diff
+      !> Get mixed object
+      procedure(get), deferred :: get
+      !> Get error metric from mixing
+      ! procedure(get_error), deferred :: get_error
+   end type mixer_type
+
+   abstract interface
+   subroutine set(self, wfn, info, ints)
+      import :: mixer_type, wavefunction_type, scf_info, integral_type
+      !> Instance of the mixer
+      class(mixer_type), intent(inout) :: self
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
       !> Info data
       type(scf_info) :: info
+      !> Integral container
+      type(integral_type), intent(in) :: ints
+   end subroutine set
 
-      integer :: ndim
-
-      select case(type)
-       case(0)
-         mixer = new_broyden(get_mixer_dimension(mol,calc%bas,info), calc%max_iter, calc%mixer_damping, calc%bas%nao)
-       case(1)
-         mixer = new_diis(get_mixer_dimension(mol,calc%bas,info), 10, calc%mixer_damping, calc%bas%nao)
-      end select
-   end subroutine new_mixer
-
-!> Get the dimensionality of the mixer
-   function get_mixer_dimension(mol, bas, info) result(ndim)
-      use tblite_scf_info, only : atom_resolved, shell_resolved
-      !> Molecular structure data
-      type(structure_type), intent(in) :: mol
-      !> Basis functions
-      type(basis_type), intent(in) :: bas
+   subroutine diff(self, wfn, info)
+      import :: mixer_type, wavefunction_type, scf_info
+      !> Instance of the mixer
+      class(mixer_type), intent(inout) :: self
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
       !> Info data
-      type(scf_info), intent(in) :: info
-      integer :: ndim
+      type(scf_info) :: info
+   end subroutine diff
 
-      ndim = 0
+   subroutine get(self, bas, wfn, info)
+      import :: mixer_type, basis_type, wavefunction_type, scf_info
+      !> Instance of the mixer
+      class(mixer_type), intent(inout) :: self
+      !> Basis functions data
+      type(basis_type), intent(in) :: bas      
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
+      !> Info data
+      type(scf_info) :: info
+   end subroutine get
+   end interface
 
-      select case(info%charge)
-       case(atom_resolved)
-         ndim = ndim + mol%nat
-       case(shell_resolved)
-         ndim = ndim + bas%nsh
-      end select
+   interface
+   subroutine next_mixer(mixer,iter) bind(C,name="Next")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      integer(c_int), value, intent(in) :: iter
+   end subroutine next_mixer
 
-      select case(info%dipole)
-       case(atom_resolved)
-         ndim = ndim + 3*mol%nat
-      end select
+   end interface
 
-      select case(info%quadrupole)
-       case(atom_resolved)
-         ndim = ndim + 6*mol%nat
-      end select
-   end function get_mixer_dimension
+   
+   contains
+
+   subroutine next(self, iter)
+      !> Broyden object
+      class(mixer_type), intent(inout) :: self
+      !> SCF Iteration
+      integer, intent(in) :: iter
+
+      call next_mixer(self%ptr, iter)
+   end subroutine next
 
 end module tblite_scf_mixer

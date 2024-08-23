@@ -50,7 +50,6 @@ module tblite_xtb_calculator
 
    !> Default configuration for self-consistent iteration mixing
    real(wp), parameter :: mixer_damping_default = 0.4_wp
-   integer, parameter :: mixer_type_default = 0
 
    !> Default maximum number of self-consistent iterations
    integer, parameter :: max_iter_default = 250
@@ -81,8 +80,10 @@ module tblite_xtb_calculator
       logical :: save_integrals = .false.
       !> List of additional interaction containers
       type(container_list), allocatable :: interactions
-      !> Type of self-consistent iteration mixing (0: Broyden, 1: DIIS)
-      integer :: mixer_type = mixer_type_default
+      !> Type(s) of self-consistent iteration mixing (0: Broyden, 1: DIIS)
+      integer, allocatable :: mixer_type(:)
+      !> Energy threshold at which the type of mixer changes
+      real(wp) :: mixer_change
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info
