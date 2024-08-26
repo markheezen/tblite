@@ -96,9 +96,6 @@ contains
          if (mixers%currmix == 0) call mixers%broyden%get(bas, wfn, info)
       end if
 
-      if (mixers%currmix == 0) write(*,*) "Broyden"
-      if (mixers%currmix == 1) write(*,*) "DIIS"
-
       iscf = iscf + 1
       call pot%reset
       if (present(coulomb)) then
