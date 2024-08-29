@@ -91,7 +91,7 @@ contains
       type(scf_info) :: info
 
       self%ndim = calc%bas%nao**2
-      self%memory = p
+      self%memory = 10
       self%ptr = c_new_diis(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_diis
 
