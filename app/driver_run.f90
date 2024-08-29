@@ -59,7 +59,7 @@ module tblite_driver_run
    !> Convert V/Å = J/(C·Å) to atomic units
    real(wp), parameter :: vatoau = jtoau / (ctoau * aatoau)
    character(len=:), allocatable :: wbo_label, molmom_label
-   integer, parameter :: mixer_type_default = (0)
+   integer, parameter :: mixer_type_default = 0
 
 contains
 
@@ -159,17 +159,11 @@ subroutine run_main(config, error)
 
    if (allocated(config%max_iter)) calc%max_iter = config%max_iter
    if (allocated(config%mixer)) then
-      allocate(calc%mixer_type(size(config%mixer)))
+      allocate(calc%mixer_type)
       calc%mixer_type = config%mixer
    else
-      allocate(calc%mixer_type(1))
+      allocate(calc%mixer_type)
       calc%mixer_type = mixer_type_default
-   end if
-
-   if (allocated(config%mixer_change)) then
-      calc%mixer_change = config%mixer_change
-   else
-      calc%mixer_change = 0.01
    end if
 
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, nspin, config%etemp * kt)

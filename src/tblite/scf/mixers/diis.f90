@@ -51,10 +51,11 @@ module tblite_scf_mixer_diis
          real(c_double), value :: alpha
          integer(c_int), value :: nao
       end function c_new_diis
-      subroutine copy_matrices(mixer,fock,density,overlap) bind(C,name="CopyMatrices")
+      subroutine copy_matrices(mixer,iscf,fock,density,overlap) bind(C,name="CopyMatrices")
          use iso_c_binding
          use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
+         integer, intent(in), value :: iscf
          real(wp), intent(in) :: fock(*)
          real(wp), intent(in) :: density(*)
          real(wp), intent(in) :: overlap(*)
@@ -90,15 +91,17 @@ contains
       type(scf_info) :: info
 
       self%ndim = calc%bas%nao**2
-      self%memory = 10
+      self%memory = p
       self%ptr = c_new_diis(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_diis
 
    !> Set the vector to mix
-   subroutine set_diis(self, wfn, info, ints)
+   subroutine set_diis(self, iscf, wfn, info, ints)
     use tblite_scf_info, only : atom_resolved, shell_resolved
     !> Instance of the Broyden mixer
     class(diis_type), intent(inout) :: self
+    !> Current iteration count
+    integer, intent(inout) :: iscf
     !> Wavefunction data
     type(wavefunction_type), intent(inout) :: wfn
     !> Info data
@@ -106,7 +109,7 @@ contains
     !> Integral container
     type(integral_type), intent(in) :: ints
 
-      call copy_matrices(self%ptr,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
+      call copy_matrices(self%ptr,iscf,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
    end subroutine set_diis
 
    !> Get the differences of the mixed vector

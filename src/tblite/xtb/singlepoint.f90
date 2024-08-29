@@ -289,17 +289,6 @@ contains
             & escape(ctx%terminal%reset))
          end if
 
-         if (mixers%change == .false. .and. abs(sum(eelec) - elast) < mixers%threshold) then
-            mixers%change = .true.
-            mixers%currmix = calc%mixer_type(2)
-            select case(calc%mixer_type(2))
-            case(0)
-               mixers%currptr = mixers%broyden%ptr
-            case(1)
-               mixers%currptr = mixers%diis%ptr
-            end select
-         end if
-
          if (allocated(error)) then
             call ctx%set_error(error)
             exit

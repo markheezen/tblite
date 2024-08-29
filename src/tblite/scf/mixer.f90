@@ -53,10 +53,12 @@ module tblite_scf_mixer
    end type mixer_type
 
    abstract interface
-   subroutine set(self, wfn, info, ints)
+   subroutine set(self, iscf, wfn, info, ints)
       import :: mixer_type, wavefunction_type, scf_info, integral_type
       !> Instance of the mixer
       class(mixer_type), intent(inout) :: self
+      !> Current iteration count
+      integer, intent(inout) :: iscf
       !> Wavefunction data
       type(wavefunction_type), intent(inout) :: wfn
       !> Info data

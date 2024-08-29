@@ -91,12 +91,13 @@ contains
       real(wp), allocatable :: eao(:)
       real(wp) :: ts
 
-      if (allocated(mixers%broyden) .and. iscf > 0) then ! Perform Broyden
+      iscf = iscf + 1
+
+      if (allocated(mixers%broyden) .and. iscf > 1) then
          call mixers%broyden%next(iscf)
-         if (mixers%currmix == 0) call mixers%broyden%get(bas, wfn, info)
+         call mixers%broyden%get(bas, wfn, info)
       end if
 
-      iscf = iscf + 1
       call pot%reset
       if (present(coulomb)) then
          call coulomb%get_potential(mol, cache, wfn, pot)
@@ -110,13 +111,14 @@ contains
       call add_pot_to_h1(bas, ints, pot, wfn%coeff)
      
       if (allocated(mixers%broyden) .and. iscf > 1) then
-         call mixers%broyden%set(wfn, info, ints)
+         call mixers%broyden%set(iscf, wfn, info, ints)
       end if
 
+      if (allocated(mixers%diis)) call mixers%diis%set(iscf, wfn, info, ints)
+
       if (allocated(mixers%diis) .and. iscf > 1) then
-         call mixers%diis%set(wfn, info, ints)
          call mixers%diis%next(iscf)
-         if (mixers%currmix == 1) call mixers%diis%get(bas, wfn, info)
+         call mixers%diis%get(bas, wfn, info)
       endif
 
       call get_density(wfn, solver, ints, ts, error)
@@ -135,7 +137,7 @@ contains
          call mixers%broyden%diff(wfn, info)
       end if
 
-      if (allocated(mixers%diis)) then
+      if (allocated(mixers%diis) .and. iscf == 1) then
          call mixers%diis%diff(wfn, info)
       end if
 

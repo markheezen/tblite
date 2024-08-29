@@ -95,7 +95,7 @@ contains
       type(scf_info) :: info
 
       self%ndim = self%get_dimension(mol,calc%bas,info)
-      self%memory = 10
+      self%memory = calc%max_iter
       self%ptr = c_new_broyden(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_broyden
 
@@ -134,10 +134,12 @@ contains
 
 
    !> Set the vector to mix
-   subroutine set_broyden(self, wfn, info, ints)
+   subroutine set_broyden(self, iscf, wfn, info, ints)
       use tblite_scf_info, only : atom_resolved, shell_resolved
       !> Instance of the Broyden mixer
       class(broyden_type), intent(inout) :: self
+      !> Current iteration count
+      integer, intent(inout) :: iscf
       !> Wavefunction data
       type(wavefunction_type), intent(inout) :: wfn
       !> Info data

@@ -91,9 +91,7 @@ module tblite_cli
       !> Purification runmode
       integer(c_size_t) :: purification_runmode_ = purification_runmode%default
       !> Type of mixer
-      integer, allocatable :: mixer(:)
-      !> Energy error to change mixer type
-      real(wp), allocatable :: mixer_change
+      integer, allocatable :: mixer
    end type run_config
 
    !> Configuration for evaluating tight binding model on input structure
@@ -424,27 +422,12 @@ subroutine get_run_arguments(config, list, start, error)
       case("--mixer")
          iarg = iarg + 1
          call list%get(iarg, arg)
-         allocate(config%mixer(1))
-         call get_argument_as_intv(arg, config%mixer, error)
-         if (size(config%mixer) > 2) then
-            call fatal_error(error, "Only 2 different types of mixers are supported")
-         endif
-         do i = 1, size(config%mixer)
-            if (config%mixer(i) < 0 .or. config%mixer(i) > 1) then
-               call fatal_error(error,"Mixers must be either 0 (Broyden) or 1 (DIIS)")
-            end if
-         end do
+         allocate(config%mixer)
+         call get_argument_as_int(arg, config%mixer, error)
          if (allocated(error)) exit
-      
-      case("--mixchange")
-         iarg = iarg + 1
-         call list%get(iarg, arg)
-         if (.not.allocated(config%mixer) .or. size(config%mixer) /= 2) then
-            call fatal_error(error,"Change of mixers may only be invoked when 2 mixers are specified")
+         if (config%mixer < 0 .or. config%mixer > 1) then
+            call fatal_error(error,"Mixers must be either 0 (Broyden) or 1 (DIIS)")
          end if
-         allocate(config%mixer_change)
-         call get_argument_as_real(arg, config%mixer_change, error)
-         if (allocated(error)) exit
 
       case("--solver")
          iarg = iarg + 1
@@ -1051,7 +1034,7 @@ subroutine get_argument_as_intv(arg, val, error)
    character(len=:), allocatable :: targ
 
    if (.not.allocated(arg)) then
-      call fatal_error(error, "Cannot read real value, argument missing")
+      call fatal_error(error, "Cannot read integer value, argument missing")
       return
    end if
 
@@ -1074,7 +1057,7 @@ subroutine get_argument_as_intv(arg, val, error)
    end do
    read(targ, *, iostat=stat) val
    if (stat /= 0) then
-      call fatal_error(error, "Cannot read real value from '"//arg//"'")
+      call fatal_error(error, "Cannot read integer value from '"//arg//"'")
       return
    end if
 

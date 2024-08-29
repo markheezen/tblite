@@ -81,9 +81,7 @@ module tblite_xtb_calculator
       !> List of additional interaction containers
       type(container_list), allocatable :: interactions
       !> Type(s) of self-consistent iteration mixing (0: Broyden, 1: DIIS)
-      integer, allocatable :: mixer_type(:)
-      !> Energy threshold at which the type of mixer changes
-      real(wp) :: mixer_change
+      integer, allocatable :: mixer_type
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info

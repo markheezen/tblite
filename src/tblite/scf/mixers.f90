@@ -36,12 +36,6 @@ module tblite_scf_mixers
       type(diis_type), allocatable :: diis
       !> Pointer to the current mixer
       type(c_ptr) :: currptr
-      !> Current mixer
-      integer :: currmix
-      !> Threshold to change mixers
-      real(wp) :: threshold = 0.01
-      !> Iterator has been changed
-      logical :: change = .false. 
 
    contains
       !> Create mixers
@@ -58,11 +52,11 @@ module tblite_scf_mixers
    end interface
 
 contains
-   subroutine setup(self, mixer_types, mol, calc, info)
+   subroutine setup(self, mixer_type, mol, calc, info)
       !> Mixers object
       class(mixers_type), intent(inout) :: self
       !> Type(s) of self-consistent iteration mixing (0: Broyden, 1: DIIS)
-      integer, allocatable, intent(in) :: mixer_types(:)
+      integer, intent(in) :: mixer_type
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
       !> Single-point calculator
@@ -72,31 +66,16 @@ contains
 
       integer :: i
 
-      do i = 1, size(mixer_types)
-      select case (mixer_types(i))
+      select case (mixer_type)
        case(0)
         allocate(self%broyden)
-         call new_broyden(self%broyden, mol, calc, info)
+        call new_broyden(self%broyden, mol, calc, info)
+        self%currptr=self%broyden%ptr
        case(1)
         allocate(self%diis)
          call new_diis(self%diis, mol, calc, info)
+         self%currptr=self%diis%ptr
       end select
-
-      select case(mixer_types(1))
-      case(0)
-        self%currptr = self%broyden%ptr
-      case(1)
-        self%currptr = self%diis%ptr
-      end select
-
-      self%threshold = calc%mixer_change
-      self%currmix = mixer_types(1)
-
-      if (size(mixer_types) == 1) then
-        self%change = .true.
-      end if
-
-   end do
 
 end subroutine setup
 
