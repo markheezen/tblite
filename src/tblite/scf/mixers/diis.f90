@@ -51,7 +51,7 @@ module tblite_scf_mixer_diis
          real(c_double), value :: alpha
          integer(c_int), value :: nao
       end function c_new_diis
-      subroutine copy_matrices(mixer,iscf,fock,density,overlap) bind(C,name="CopyMatrices")
+      subroutine set_fds(mixer,iscf,fock,density,overlap) bind(C,name="SetFDS")
          use iso_c_binding
          use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
@@ -59,7 +59,7 @@ module tblite_scf_mixer_diis
          real(wp), intent(in) :: fock(*)
          real(wp), intent(in) :: density(*)
          real(wp), intent(in) :: overlap(*)
-      end subroutine copy_matrices
+      end subroutine set_fds
 
       subroutine get_mixer_data(mixer,target,size) bind(C,name="GetData")
         use iso_c_binding
@@ -109,7 +109,7 @@ contains
     !> Integral container
     type(integral_type), intent(in) :: ints
 
-      call copy_matrices(self%ptr,iscf,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
+      call set_fds(self%ptr,iscf,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
    end subroutine set_diis
 
    !> Get the differences of the mixed vector
