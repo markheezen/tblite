@@ -71,7 +71,7 @@ module tblite_coulomb_charge_effective
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
    real(wp), parameter :: conv = eps
-   character(len=*), parameter :: label = "isotropic Klopman-Ohno-Mataga-Nishimoto electrostatics"
+   character(len=*), parameter :: label = "isotropic Klopman-Ohno electrostatics"
 
 contains
 
@@ -94,8 +94,6 @@ subroutine new_effective_coulomb(self, mol, gexp, hubbard, average, nshell)
    integer :: isp, jsp, ish, jsh, ind, iat
 
    self%label = label
-
-   self%shell_resolved = present(nshell)
    if (present(nshell)) then
       mshell = maxval(nshell)
       self%nshell = nshell(mol%id)

@@ -31,16 +31,18 @@ module tblite_driver_run
    use tblite_output_ascii
    use tblite_param, only : param_record
    use tblite_results, only : results_type
+   use tblite_roks, only: roks_singlepoint
    use tblite_spin, only : spin_polarization, new_spin_polarization
    use tblite_solvation, only : new_solvation, solvation_type
    use tblite_wavefunction, only : wavefunction_type, new_wavefunction, &
       & sad_guess, eeq_guess, shell_partition
+   use tblite_wavefunction_guess_sadno, only : sadno_guess
    use tblite_xtb_calculator, only : xtb_calculator, new_xtb_calculator
    use tblite_xtb_gfn2, only : new_gfn2_calculator, export_gfn2_param
    use tblite_xtb_gfn1, only : new_gfn1_calculator, export_gfn1_param
    use tblite_xtb_ipea1, only : new_ipea1_calculator, export_ipea1_param
    use tblite_xtb_singlepoint, only : xtb_singlepoint
-   use tblite_ceh_singlepoint, only : ceh_singlepoint
+   use tblite_ceh_singlepoint, only : ceh_guess
    use tblite_ceh_ceh, only : new_ceh_calculator
    use tblite_post_processing_list, only : add_post_processing, post_processing_type, post_processing_list
 
@@ -58,6 +60,7 @@ module tblite_driver_run
    !> Convert V/Å = J/(C·Å) to atomic units
    real(wp), parameter :: vatoau = jtoau / (ctoau * aatoau)
    character(len=:), allocatable :: wbo_label, molmom_label
+   integer, parameter :: mixer_type_default = 0
 
 contains
 
@@ -142,22 +145,28 @@ subroutine run_main(config, error)
       case default
          call fatal_error(error, "Unknown method '"//method//"' requested")
       case("gfn2")
-         call new_gfn2_calculator(calc, mol, error)
+         call new_gfn2_calculator(calc, mol)
       case("gfn1")
-         call new_gfn1_calculator(calc, mol, error)
+         call new_gfn1_calculator(calc, mol)
       case("ipea1")
-         call new_ipea1_calculator(calc, mol, error)
+         call new_ipea1_calculator(calc, mol)
       end select
    end if
    if (allocated(error)) return
 
    if (allocated(config%max_iter)) calc%max_iter = config%max_iter
+   if (allocated(config%mixer)) then
+      allocate(calc%mixer_type)
+      calc%mixer_type = config%mixer
+   else
+      allocate(calc%mixer_type)
+      calc%mixer_type = mixer_type_default
+   end if
 
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, nspin, config%etemp * kt)
 
    if (config%guess == "ceh") then
-      call new_ceh_calculator(calc_ceh, mol, error)
-      if (allocated(error)) return
+      call new_ceh_calculator(calc_ceh, mol)
       call new_wavefunction(wfn_ceh, mol%nat, calc_ceh%bas%nsh, calc_ceh%bas%nao, 1, config%etemp_guess * kt)
       if (config%grad) then
          call ctx%message("WARNING: CEH gradient not yet implemented. Stopping.")
@@ -188,7 +197,7 @@ subroutine run_main(config, error)
    case("eeq")
       call eeq_guess(mol, calc, wfn)
    case("ceh")
-      call ceh_singlepoint(ctx, calc_ceh, mol, wfn_ceh, config%accuracy, config%verbosity)
+      call ceh_guess(ctx, calc_ceh, mol, error, wfn_ceh, config%accuracy, config%verbosity)
       if (ctx%failed()) then
          call fatal(ctx, "CEH singlepoint calculation failed")
          do while(ctx%failed())
@@ -199,6 +208,12 @@ subroutine run_main(config, error)
       end if
       wfn%qat(:, 1) = wfn_ceh%qat(:, 1)
       call shell_partition(mol, calc, wfn)
+   case("sadno")
+      if (allocated(config%param)) then
+         call sadno_guess(mol, calc, wfn, param=param)
+      else
+         call sadno_guess(mol, calc, wfn, method=method)
+      end if
    end select
    if (allocated(error)) return
 
@@ -256,8 +271,14 @@ subroutine run_main(config, error)
       call ctx%message("")
    end if
 
-   call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
+   if (allocated(config%roks)) then
+      call roks_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
       & config%verbosity, results, post_proc)
+   else
+      call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
+         & config%verbosity, results, post_proc)
+   end if
+
    if (ctx%failed()) then
       call fatal(ctx, "Singlepoint calculation failed")
       do while(ctx%failed())
@@ -267,33 +288,37 @@ subroutine run_main(config, error)
       error stop
    end if
 
-   if (config%verbosity > 2) then
-      call ascii_levels(ctx%unit, config%verbosity, wfn%homo, wfn%emo, wfn%focc, 7)
-      call post_proc%dict%get_entry("molecular-dipole", dpmom)
-      call post_proc%dict%get_entry("molecular-quadrupole", qpmom)
-      
-      call ascii_dipole_moments(ctx%unit, 1, mol, wfn%dpat(:, :, 1), dpmom)
-      call ascii_quadrupole_moments(ctx%unit, 1, mol, wfn%qpat(:, :, 1), qpmom)
-   end if
-
-   deallocate(post_proc)
-
-   if (allocated(config%grad_output)) then
-      open(file=config%grad_output, newunit=unit)
-      call tagged_result(unit, energy, gradient, sigma, energies=results%energies)
-      close(unit)
-      if (config%verbosity > 0) then
-         call info(ctx, "Tight-binding results written to '"//config%grad_output//"'")
+   if (allocated(config%roks)) then
+      continue
+   else
+      if (config%verbosity > 2) then
+         call ascii_levels(ctx%unit, config%verbosity, wfn%homo, wfn%emo, wfn%focc, 7)
+         call post_proc%dict%get_entry("molecular-dipole", dpmom)
+         call post_proc%dict%get_entry("molecular-quadrupole", qpmom)
+         
+         call ascii_dipole_moments(ctx%unit, 1, mol, wfn%dpat(:, :, 1), dpmom)
+         call ascii_quadrupole_moments(ctx%unit, 1, mol, wfn%qpat(:, :, 1), qpmom)
       end if
-   end if
 
-   if (config%json) then
-      open(file=config%json_output, newunit=unit)
-      call json_results(unit, "  ", energy=energy, gradient=gradient, sigma=sigma, &
-         & energies=results%energies)
-      close(unit)
-      if (config%verbosity > 0) then
-         call info(ctx, "JSON dump of results written to '"//config%json_output//"'")
+      deallocate(post_proc)
+
+      if (allocated(config%grad_output)) then
+         open(file=config%grad_output, newunit=unit)
+         call tagged_result(unit, energy, gradient, sigma, energies=results%energies)
+         close(unit)
+         if (config%verbosity > 0) then
+            call info(ctx, "Tight-binding results written to '"//config%grad_output//"'")
+         end if
+      end if
+
+      if (config%json) then
+         open(file=config%json_output, newunit=unit)
+         call json_results(unit, "  ", energy=energy, gradient=gradient, sigma=sigma, &
+            & energies=results%energies)
+         close(unit)
+         if (config%verbosity > 0) then
+            call info(ctx, "JSON dump of results written to '"//config%json_output//"'")
+         end if
       end if
    end if
 end subroutine run_main

@@ -74,11 +74,11 @@ if lapack_vendor == 'mkl'
   endif
   mkl_dep += cc.find_library('mkl_core')
   lib_deps += mkl_dep
-  add_project_arguments(['-DWITH_MKL'], language: 'fortran')
+
 elif lapack_vendor == 'mkl-rt'
   mkl_dep = fc.find_library('mkl_rt')
   lib_deps += mkl_dep
-  add_project_arguments(['-DWITH_MKL'], language: 'fortran')
+
 elif lapack_vendor == 'openblas'
   openblas_dep = dependency('openblas', required: false)
   if not openblas_dep.found()
@@ -145,3 +145,29 @@ tomlf_dep = dependency(
   default_options: ['default_library=static'],
 )
 lib_deps += tomlf_dep
+
+tc_purification_dep = dependency(
+  'tc-purification',
+  version: '>=0.0.0',
+  fallback: ['tc-purification','tc_purification_dep'],
+  default_options: ['default_library=static','gpu=true'],
+)
+lib_deps += tc_purification_dep
+
+gpu = get_option('gpu')
+if gpu == true
+mullk_dep = dependency(
+  'mullk',
+  version: '>=0.0.1',
+  fallback: ['mullk', 'mullk_dep'],
+  default_options: ['default_library=static','gpu=true'],
+)
+else
+mullk_dep = dependency(
+  'mullk',
+  version: '>=0.0.1',
+  fallback: ['mullk', 'mullk_dep'],
+  default_options: ['default_library=static','gpu=false'],
+)
+endif
+lib_deps += mullk_dep

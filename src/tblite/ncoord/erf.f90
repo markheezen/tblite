@@ -39,31 +39,23 @@ module tblite_ncoord_erf
       procedure :: ncoord_dcount
    end type erf_ncoord_type
 
-   !> Steepness of counting function (CEH)
-   real(wp), parameter :: default_kcn = 3.15_wp
+   !> Steepness of counting function # TF Jan 10, 2024
+   real(wp), parameter :: kcn = 2.60_wp
 
    real(wp), parameter :: default_cutoff = 25.0_wp
 
 contains
 
 
-   subroutine new_erf_ncoord(self, mol, kcn, cutoff, rcov)
+   subroutine new_erf_ncoord(self, mol, cutoff, rcov)
       !> Coordination number container
       type(erf_ncoord_type), intent(out) :: self
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
-      !> Steepness of counting function
-      real(wp), optional :: kcn
       !> Real space cutoff
       real(wp), intent(in), optional :: cutoff
       !> Covalent radii
       real(wp), intent(in), optional :: rcov(:)
-
-      if(present(kcn)) then
-         self%kcn = kcn
-      else
-         self%kcn = default_kcn
-      end if
 
       if (present(cutoff)) then
          self%cutoff = cutoff
@@ -96,11 +88,11 @@ contains
       real(wp), intent(in) :: r
 
       real(wp) :: rc, count
-      
-      rc = (self%rcov(izp) + self%rcov(jzp))
+
+      rc = self%rcov(izp) + self%rcov(jzp)
       ! error function based counting function
-      count = 0.5_wp * (1.0_wp + erf(-self%kcn*(r-rc)/rc))
-      
+      count = 0.5_wp * (1.0_wp + erf(-kcn*(r-rc)/rc))
+
    end function ncoord_count
 
    !> Derivative of the error counting function w.r.t. the distance.
@@ -120,9 +112,9 @@ contains
 
       rc = self%rcov(izp) + self%rcov(jzp)
       ! error function based counting function with EN derivative
-      exponent = self%kcn*(r-rc)/rc
+      exponent = kcn*(r-rc)/rc
       expterm = exp(-exponent**2)
-      count = -(self%kcn*expterm)/(rc*sqrt(pi))
+      count = -(kcn*expterm)/(rc*sqrt(pi))
 
    end function ncoord_dcount
 

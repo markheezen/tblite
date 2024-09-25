@@ -36,6 +36,8 @@ module tblite_post_processing_list
    use tblite_post_processing_bond_orders, only : new_wbo, wiberg_bond_orders
    use tblite_post_processing_molecular_moments, only : new_molecular_moments, molecular_moments
    use tblite_param_molecular_moments, only : molecular_multipole_record
+   use tblite_param_xtbml_features, only : xtbml_features_record
+   use tblite_post_processing_xtbml_features, only : xtbml_type, new_xtbml_features
    implicit none
    private
 
@@ -84,7 +86,6 @@ subroutine pack_res(self, mol, res)
    real(wp), allocatable :: tmp_array(:)
    character(len=:), allocatable :: tmp_label
 
-   !allocate(res%dict)
    res%dict = self%dict
 end subroutine
 
@@ -156,6 +157,15 @@ subroutine add_post_processing_param(self, param)
             call move_alloc(tmp, proc)
             call self%push(proc)
          end block
+      type is (xtbml_features_record)
+            block
+               type(xtbml_type), allocatable :: tmp
+               class(post_processing_type), allocatable :: proc
+               allocate(tmp)
+               call new_xtbml_features(tmp, par)
+               call move_alloc(tmp, proc)
+               call self%push(proc)
+            end block   
       end select
    end do
 end subroutine
@@ -185,6 +195,24 @@ subroutine add_post_processing_cli(self, config, error)
          call molmom_tmp%populate_default_param()
          call move_alloc(molmom_tmp, tmp)
          call param%push(tmp)
+      end block
+    case("xtbml")
+        block 
+            type(xtbml_features_record), allocatable :: ml_param
+            class(serde_record), allocatable :: cont
+            allocate(ml_param)
+            call ml_param%populate_default_param(.false.)
+            call move_alloc(ml_param, cont)
+            call param%push(cont)
+        end block
+    case("xtbml_xyz")
+      block 
+        type(xtbml_features_record), allocatable :: ml_param
+        class(serde_record), allocatable :: cont 
+        allocate(ml_param)
+        call ml_param%populate_default_param(.true.)
+        call move_alloc(ml_param, cont)
+        call param%push(cont) 
       end block
    case default
       block

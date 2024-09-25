@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with tblite.  If not, see <https://www.gnu.org/licenses/>.
 
-add_subdirectory("mixer")
+add_subdirectory("mixers")
 
 set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -25,6 +25,7 @@ list(
   "${dir}/mixer.f90"
   "${dir}/potential.f90"
   "${dir}/solver.f90"
+  "${dir}/type.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

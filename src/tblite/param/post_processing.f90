@@ -24,6 +24,7 @@ module tblite_param_post_processing
    use tblite_param_serde, only : serde_record
    use tblite_toml, only : toml_table, get_value, set_value, add_table, toml_array, toml_key
    use tblite_param_molecular_moments, only : molecular_multipole_record
+   use tblite_param_xtbml_features, only : xtbml_features_record
    implicit none
    private
 
@@ -65,7 +66,6 @@ subroutine push(self, record)
 
    self%n = self%n + 1
    call move_alloc(record, self%list(self%n)%record)
-
 end subroutine push
 
 pure subroutine resize(list, n)
@@ -131,6 +131,7 @@ subroutine load_from_toml(self, table, error)
    type(toml_table), intent(inout) :: table
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
+   type(toml_table), pointer :: child
 
    integer :: ii
    type(toml_key), allocatable :: list(:)
@@ -145,6 +146,16 @@ subroutine load_from_toml(self, table, error)
             class(serde_record), allocatable :: cont
             allocate(tmp_record)
             call tmp_record%load(table, error) 
+            call move_alloc(tmp_record, cont)
+            call self%push(cont)
+         end block
+      case("xtbml")
+         block 
+            type(xtbml_features_record), allocatable :: tmp_record
+            class(serde_record), allocatable :: cont
+            allocate(tmp_record)
+            call get_value(table, "xtbml", child, requested=.false.)
+            call tmp_record%load(child, error)
             call move_alloc(tmp_record, cont)
             call self%push(cont)
          end block

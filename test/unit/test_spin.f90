@@ -83,8 +83,7 @@ subroutine test_e_p10(error)
    call rse43_p10(mol)
    energy = 0.0_wp
 
-   call new_gfn2_calculator(calc, mol, error)
-   if (allocated(error)) return
+   call new_gfn2_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 2, kt)
 
    block
@@ -128,8 +127,7 @@ subroutine test_e_crcp2(error)
    allocate(gradient(3, mol%nat), sigma(3, 3))
    energy = 0.0_wp
 
-   call new_gfn1_calculator(calc, mol, error)
-   if (allocated(error)) return
+   call new_gfn1_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 2, kt)
 
    block
@@ -194,8 +192,7 @@ subroutine test_g_p10(error)
    gradient(:, :) = 0.0_wp
    sigma(:, :) = 0.0_wp
 
-   call new_gfn1_calculator(calc, mol, error)
-   if (allocated(error)) return
+   call new_gfn1_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 2, kt)
 
    block
@@ -259,8 +256,7 @@ subroutine test_g_crcp2(error)
    gradient(:, :) = 0.0_wp
    sigma(:, :) = 0.0_wp
 
-   call new_gfn2_calculator(calc, mol, error)
-   if (allocated(error)) return
+   call new_gfn2_calculator(calc, mol)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 2, kt)
 
    block

@@ -22,37 +22,93 @@
 
 !> Provides an electronic mixer implementation
 module tblite_scf_mixer
-   use mctc_env, only : wp
-   use tblite_scf_mixer_broyden, only : broyden_mixer, broyden_input, new_broyden
-   use tblite_scf_mixer_type, only : mixer_type
+   use tblite_xtb_calculator, only : xtb_calculator
+   use mctc_io, only : structure_type
+   use tblite_scf_info, only : scf_info
+   use tblite_integral_type, only : integral_type
+   use tblite_basis_type, only : basis_type
+   use tblite_xtb_calculator, only : xtb_calculator
+   use tblite_wavefunction, only : wavefunction_type
+   use iso_c_binding
    implicit none
-   private
-
-   public :: mixer_type, new_mixer
 
 
-   !> Input for selecting electronic mixer
-   type, public :: mixer_input
-      !> Input for Broyden mixer
-      type(broyden_input), allocatable :: broyden
-   end type mixer_input
 
-contains
+   !> Electronic mixer
+   type, public, abstract :: mixer_type
+      integer :: ndim
+      integer :: memory
+      type(c_ptr) :: ptr
+   contains
+      !> Apply mixing to the density
+      procedure :: next
+      !> Set new object to mix
+      procedure(set), deferred :: set
+      !> Set difference between two consecutive objects to mix
+      procedure(diff), deferred :: diff
+      !> Get mixed object
+      procedure(get), deferred :: get
+      !> Get error metric from mixing
+      ! procedure(get_error), deferred :: get_error
+   end type mixer_type
 
-!> Create a new instance of the mixer
-subroutine new_mixer(self, memory, ndim, damp)
-   !> Instance of the mixer on exit
-   class(mixer_type), allocatable, intent(out) :: self
-   integer, intent(in) :: memory
-   integer, intent(in) :: ndim
-   real(wp), intent(in) :: damp
+   abstract interface
+   subroutine set(self, iscf, wfn, info, ints)
+      import :: mixer_type, wavefunction_type, scf_info, integral_type
+      !> Instance of the mixer
+      class(mixer_type), intent(inout) :: self
+      !> Current iteration count
+      integer, intent(inout) :: iscf
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
+      !> Info data
+      type(scf_info) :: info
+      !> Integral container
+      type(integral_type), intent(in) :: ints
+   end subroutine set
 
-   block
-      type(broyden_mixer), allocatable :: mixer
-      allocate(mixer)
-      call new_broyden(mixer, ndim, broyden_input(memory, damp))
-      call move_alloc(mixer, self)
-   end block
-end subroutine new_mixer
+   subroutine diff(self, wfn, info)
+      import :: mixer_type, wavefunction_type, scf_info
+      !> Instance of the mixer
+      class(mixer_type), intent(inout) :: self
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
+      !> Info data
+      type(scf_info) :: info
+   end subroutine diff
+
+   subroutine get(self, bas, wfn, info)
+      import :: mixer_type, basis_type, wavefunction_type, scf_info
+      !> Instance of the mixer
+      class(mixer_type), intent(inout) :: self
+      !> Basis functions data
+      type(basis_type), intent(in) :: bas      
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
+      !> Info data
+      type(scf_info) :: info
+   end subroutine get
+   end interface
+
+   interface
+   subroutine next_mixer(mixer,iter) bind(C,name="Next")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      integer(c_int), value, intent(in) :: iter
+   end subroutine next_mixer
+
+   end interface
+
+   
+   contains
+
+   subroutine next(self, iter)
+      !> Broyden object
+      class(mixer_type), intent(inout) :: self
+      !> SCF Iteration
+      integer, intent(in) :: iter
+
+      call next_mixer(self%ptr, iter)
+   end subroutine next
 
 end module tblite_scf_mixer

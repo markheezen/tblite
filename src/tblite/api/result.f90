@@ -31,14 +31,13 @@ module tblite_api_result
 
    public :: vp_result, new_result_api, copy_result_api, delete_result_api
    public :: get_result_number_of_atoms_api, get_result_number_of_shells_api, &
-      & get_result_number_of_spins_api, get_result_number_of_orbitals_api, &
-      & get_result_energy_api, get_result_gradient_api, get_result_virial_api, &
-      & get_result_charges_api, get_result_dipole_api, get_result_quadrupole_api, &
-      & get_result_orbital_energies_api, get_result_orbital_occupations_api, &
-      & get_result_orbital_coefficients_api, get_result_energies_api, &
-      & get_result_density_matrix_api, get_result_overlap_matrix_api, &
-      & get_result_hamiltonian_matrix_api, get_result_bond_orders_api, &
-      & get_post_processing_dict_api
+      & get_result_number_of_orbitals_api, get_result_energy_api, get_result_gradient_api, &
+      & get_result_virial_api, get_result_charges_api, get_result_dipole_api, &
+      & get_result_quadrupole_api, get_result_orbital_energies_api, &
+      & get_result_orbital_occupations_api, get_result_orbital_coefficients_api, &
+      & get_result_energies_api, get_result_density_matrix_api, &
+      & get_result_overlap_matrix_api, get_result_hamiltonian_matrix_api, &
+      & get_result_bond_orders_api, get_post_processing_dict_api
 
 
    !> Void pointer holding results of a calculation
@@ -132,31 +131,8 @@ subroutine get_result_number_of_atoms_api(verror, vres, natoms) &
       return
    end if
 
-   natoms = size(res%wfn%qat, 1)
+   natoms = size(res%wfn%qat)
 end subroutine get_result_number_of_atoms_api
-
-
-subroutine get_result_number_of_spins_api(verror, vres, nspin) &
-      & bind(C, name=namespace//"get_result_number_of_spins")
-   type(c_ptr), value :: verror
-   type(vp_error), pointer :: error
-   type(c_ptr), value :: vres
-   type(vp_result), pointer :: res
-   integer(c_int), intent(out) :: nspin
-   logical :: ok
-
-   if (debug) print '("[Info]", 1x, a)', "get_result_number_of_spins"
-
-   call get_result(verror, vres, error, res, ok)
-   if (.not.ok) return
-
-   if (.not.allocated(res%wfn)) then
-      call fatal_error(error%ptr, "Result does not contain number of spins")
-      return
-   end if
-
-   nspin = res%wfn%nspin
-end subroutine get_result_number_of_spins_api
 
 
 subroutine get_result_number_of_shells_api(verror, vres, nshells) &
@@ -178,7 +154,7 @@ subroutine get_result_number_of_shells_api(verror, vres, nshells) &
       return
    end if
 
-   nshells = size(res%wfn%qsh, 1)
+   nshells = size(res%wfn%qsh)
 end subroutine get_result_number_of_shells_api
 
 
@@ -201,7 +177,7 @@ subroutine get_result_number_of_orbitals_api(verror, vres, norb) &
       return
    end if
 
-   norb = size(res%wfn%emo, 1)
+   norb = size(res%wfn%emo)
 end subroutine get_result_number_of_orbitals_api
 
 
@@ -321,7 +297,7 @@ subroutine get_result_charges_api(verror, vres, charges) &
       return
    end if
 
-   charges(:size(res%wfn%qat, 1)) = res%wfn%qat(:, 1)
+   charges(:size(res%wfn%qat)) = res%wfn%qat(:, 1)
 end subroutine get_result_charges_api
 
 
@@ -339,7 +315,7 @@ subroutine get_result_dipole_api(verror, vres, dipole) &
 
    call get_result(verror, vres, error, res, ok)
    if (.not.ok) return
-
+   
    if (.not.allocated(res%results)) then
       call fatal_error(error%ptr, "Result does not contain dipole moment")
       return
@@ -405,7 +381,7 @@ subroutine get_result_orbital_energies_api(verror, vres, emo) &
       return
    end if
 
-   emo(:size(res%wfn%emo)) = reshape(res%wfn%emo, [size(res%wfn%emo)])
+   emo(:size(res%wfn%emo)) = res%wfn%emo(:, 1)
 end subroutine get_result_orbital_energies_api
 
 
@@ -428,7 +404,7 @@ subroutine get_result_orbital_occupations_api(verror, vres, occ) &
       return
    end if
 
-   occ(:size(res%wfn%focc)) = reshape(res%wfn%focc, [size(res%wfn%focc)])
+   occ(:size(res%wfn%focc)) = res%wfn%focc(:, 1)
 end subroutine get_result_orbital_occupations_api
 
 
@@ -451,7 +427,7 @@ subroutine get_result_orbital_coefficients_api(verror, vres, cmo) &
       return
    end if
 
-   cmo(:size(res%wfn%coeff)) = reshape(res%wfn%coeff, [size(res%wfn%coeff)])
+   cmo(:size(res%wfn%coeff)) = reshape(res%wfn%coeff(:, :, 1), [size(res%wfn%coeff)])
 end subroutine get_result_orbital_coefficients_api
 
 
@@ -474,7 +450,7 @@ subroutine get_result_density_matrix_api(verror, vres, pmat) &
       return
    end if
 
-   pmat(:size(res%wfn%density)) = reshape(res%wfn%density, [size(res%wfn%density)])
+   pmat(:size(res%wfn%density)) = reshape(res%wfn%density(:, :, 1), [size(res%wfn%density)])
 end subroutine get_result_density_matrix_api
 
 
@@ -545,6 +521,7 @@ subroutine get_result_bond_orders_api(verror, vres, mbo) &
    real(c_double), intent(out) :: mbo(*)
    real(kind=wp), allocatable :: mbo_f(:, :, :)
    logical :: ok
+   real(wp), allocatable :: wbo(:, :, :)
 
    if (debug) print '("[Info]", 1x, a)', "get_result_bond_orders"
 
@@ -561,7 +538,7 @@ subroutine get_result_bond_orders_api(verror, vres, mbo) &
    if (.not.allocated(mbo_f)) then
       call fatal_error(error%ptr, "Could not find bond orders in results dictionary")
       return
-   end if
+   end if 
 
    mbo(:size(mbo_f)) = &
       & reshape(mbo_f, [size(mbo_f)])

@@ -226,13 +226,6 @@ def get_number_of_orbitals(res) -> int:
     return _norb[0]
 
 
-def get_number_of_spins(res) -> int:
-    """Retrieve number of spins from result container"""
-    _nspin = ffi.new("int *")
-    error_check(lib.tblite_get_result_number_of_spins)(res, _nspin)
-    return _nspin[0]
-
-
 def get_energy(res) -> float:
     """Retrieve energy from result container"""
     _energy = np.array(0.0)
@@ -314,58 +307,94 @@ def get_quadrupole(res):
 def get_orbital_energies(res):
     """Retrieve orbital energies from result container"""
     _norb = get_number_of_orbitals(res)
-    _nspin = get_number_of_spins(res)
-    _emo = np.zeros((_nspin, _norb))
+    _emo = np.zeros((_norb,))
     error_check(lib.tblite_get_result_orbital_energies)(
         res, ffi.cast("double*", _emo.ctypes.data)
     )
-    if _nspin == 1:
-        return np.squeeze(_emo, axis=0)
     return _emo
 
 
 def get_orbital_occupations(res):
     """Retrieve orbital occupations from result container"""
     _norb = get_number_of_orbitals(res)
-    _nspin = get_number_of_spins(res)
-    _occ = np.zeros((_nspin, _norb))
+    _occ = np.zeros((_norb,))
     error_check(lib.tblite_get_result_orbital_occupations)(
         res, ffi.cast("double*", _occ.ctypes.data)
     )
-    if _nspin == 1:
-        return np.squeeze(_occ, axis=0)
     return _occ
 
 
-def _get_ao_matrix(getter, is_spin_dependent: bool):
+def _get_ao_matrix(getter):
     """Correctly set allocation for matrix objects before querying the getter"""
 
     @functools.wraps(getter)
     def with_allocation(res):
         """Get a matrix property from the results object"""
         _norb = get_number_of_orbitals(res)
-        _nspin = get_number_of_spins(res) if is_spin_dependent else 1
-
-        # (_norb, _norb, _nspin) in col-major -> (_nspin, _norb, _norb) in row-major
-        # this will allow us to extract alpha- and beta matrices as mat[0] and mat[1]
-        _mat = np.zeros((_nspin, _norb, _norb))
+        _mat = np.zeros((_norb, _norb))
         error_check(getter)(res, ffi.cast("double*", _mat.ctypes.data))
-
-        # Transpose actual matrix from col-major to row-major
-        # -> important for orbital coefficients
-        _mat = np.swapaxes(_mat, 1, 2)
-
-        if _nspin == 1:
-            return np.squeeze(_mat, axis=0)
         return _mat
 
     return with_allocation
 
 
-get_orbital_coefficients = _get_ao_matrix(lib.tblite_get_result_orbital_coefficients, True)
-get_density_matrix = _get_ao_matrix(lib.tblite_get_result_density_matrix, True)
-get_overlap_matrix = _get_ao_matrix(lib.tblite_get_result_overlap_matrix, False)
-get_hamiltonian_matrix = _get_ao_matrix(lib.tblite_get_result_hamiltonian_matrix, False)
+def _get_ml_features(getter):
+    """Correctly set allocation for matrix objects ml features before querying the getter"""
+
+    @functools.wraps(getter)
+    def with_allocation(res):
+        """Get a matrix property from the results object"""
+        _natoms = ffi.new("int *")
+        _nfeatures = ffi.new("int *")
+        error_check(lib.tblite_get_result_number_of_atoms)(res, _natoms)
+        error_check(lib.tblite_get_result_ml_n_features)(res, _nfeatures)
+        _mat = np.zeros((_nfeatures[0], _natoms[0]))
+        error_check(getter)(res, ffi.cast("double*", _mat.ctypes.data))
+        _mat = _mat.T
+        return _mat
+
+    return with_allocation
+
+
+def _get_w_xtbml(getter):
+    """Correctly set allocation for matrix objects w_xtbml before querying the getter"""
+
+    @functools.wraps(getter)
+    def with_allocation(res):
+        """Get a matrix property from the results object"""
+        _natoms = ffi.new("int *")
+        error_check(lib.tblite_get_result_number_of_atoms)(res, _natoms)
+        _mat = np.zeros((_natoms[0]))
+        error_check(getter)(res, ffi.cast("double*", _mat.ctypes.data))
+        _mat = _mat
+        return _mat
+
+    return with_allocation
+
+
+def _get_ml_labels(getter):
+    """Correctly set allocation for matrix objects ml features before querying the getter"""
+
+    @functools.wraps(getter)
+    def with_allocation(res):
+        """Get a matrix property from the results object"""
+        _nfeatures = ffi.new("int *")
+        error_check(lib.tblite_get_result_ml_n_features)(res, _nfeatures)
+        labels = list()
+        for i in range(1, _nfeatures[0] + 1):
+            _index = ffi.new("const int*", i)
+            _message = ffi.new("char[]", 512)
+            error_check(getter)(res, _message, ffi.NULL, _index)
+            labels.append(ffi.string(_message).decode())
+        return labels
+
+    return with_allocation
+
+
+get_orbital_coefficients = _get_ao_matrix(lib.tblite_get_result_orbital_coefficients)
+get_density_matrix = _get_ao_matrix(lib.tblite_get_result_density_matrix)
+get_overlap_matrix = _get_ao_matrix(lib.tblite_get_result_overlap_matrix)
+get_hamiltonian_matrix = _get_ao_matrix(lib.tblite_get_result_hamiltonian_matrix)
 
 
 def _delete_calculator(calc) -> None:
@@ -418,7 +447,6 @@ def get_post_processing_dict(res):
     """Retrieve the dictionary containing all post processing results"""
     _dict = ffi.gc(error_check(lib.tblite_get_post_processing_dict)(res), _delete_double_dictionary)
     _nentries = error_check(lib.tblite_get_n_entries_dict)(_dict)
-    print(_nentries)
     _dict_py = dict()
     for i in range(1,_nentries+1):
         _index = ffi.new("const int*", i)
@@ -439,9 +467,8 @@ def get_post_processing_dict(res):
         error_check(lib.tblite_get_label_entry_index)(_dict, _index, _message, ffi.NULL)
         label = ffi.string(_message).decode()
         _dict_py[label] = _array
-        print(_dict_py)
     return _dict_py
-
+        
 def get_calculator_angular_momenta(ctx, calc):
     """Retrieve angular momenta of shells"""
     _nsh = ffi.new("int *")
@@ -495,6 +522,25 @@ def new_electric_field(ctx, mol, calc, efield):
     """Create new tblite electric field object"""
     return lib.tblite_new_electric_field(efield)
 
+@context_check
+def new_alpb_solvation(ctx, mol, calc, solvent):
+    "Create new ALPB solvation model object"
+    if isinstance(solvent, str):
+        _string = ffi.new("char[]", solvent.encode("ascii"))
+        return lib.tblite_new_alpb_solvation_str(ctx, mol, calc, _string)
+    if isinstance(solvent, float) or isinstance(solvent, int):
+        _eps = float(solvent)
+        return lib.tblite_new_alpb_solvation_dbl(ctx, mol, calc, _eps)
+
+@context_check
+def new_cpcm_solvation(ctx, mol, calc, solvent):
+    "Create new ALPB solvation model object"
+    if isinstance(solvent, str):
+        _string = ffi.new("char[]", solvent.encode("ascii"))
+        return lib.tblite_new_cpcm_solvation_str(ctx, mol, calc, _string)
+    if isinstance(solvent, float) or isinstance(solvent, int):
+        _eps = float(solvent)
+        return lib.tblite_new_cpcm_solvation_dbl(ctx, mol, calc, _eps)       
 
 @context_check
 def new_alpb_solvation(ctx, mol, calc, solvent):

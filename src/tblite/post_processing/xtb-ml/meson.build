@@ -15,6 +15,12 @@
 # along with tblite.  If not, see <https://www.gnu.org/licenses/>.
 
 srcs += files(
-  'broyden.f90',
-  'type.f90',
+  'atomic_frontier_orbitals.f90',
+  'convolution.f90',
+  'density.f90',
+  'energy.f90',
+  'features.f90',
+  'geometry.f90',
+  'orbital_energy.f90',
+  'xtbml.f90',
 )

@@ -37,15 +37,13 @@ module tblite_ncoord
 contains
 
 !> Create a new generic coordination number container
-subroutine new_ncoord(self, mol, cn_type, kcn, rcov, en)
+subroutine new_ncoord(self, mol, cn_type, rcov, en)
    !> Instance of the coordination number container
    class(ncoord_type), allocatable, intent(out) :: self
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
    !> Coordination number type
    character(len=*), intent(in) :: cn_type
-   !> Steepness of counting function
-   real(wp), optional :: kcn
    !> Optional set of covalent radii to be used in CN
    real(wp), intent(in), optional :: rcov(:)
    !> Optional set of electronegativity to be use din CN
@@ -57,7 +55,7 @@ subroutine new_ncoord(self, mol, cn_type, kcn, rcov, en)
       block
          type(exp_ncoord_type), allocatable :: tmp
          allocate(tmp)
-         call new_exp_ncoord(tmp, mol, kcn=kcn, rcov=rcov)
+         call new_exp_ncoord(tmp, mol, rcov=rcov)
          call move_alloc(tmp, self)
       end block
    case("gfn")
@@ -71,14 +69,14 @@ subroutine new_ncoord(self, mol, cn_type, kcn, rcov, en)
       block
          type(erf_ncoord_type), allocatable :: tmp
          allocate(tmp)
-         call new_erf_ncoord(tmp, mol, kcn=kcn, rcov=rcov)
+         call new_erf_ncoord(tmp, mol, rcov=rcov)
          call move_alloc(tmp, self)
       end block
    case("erf_en")
       block
          type(erf_en_ncoord_type), allocatable :: tmp
          allocate(tmp)
-         call new_erf_en_ncoord(tmp, mol, kcn=kcn, rcov=rcov, en=en)
+         call new_erf_en_ncoord(tmp, mol, rcov=rcov, en=en)
          call move_alloc(tmp, self)
       end block
    end select

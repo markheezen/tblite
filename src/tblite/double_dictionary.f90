@@ -22,8 +22,7 @@
 module tblite_double_dictionary
    use mctc_env_accuracy, only : wp, i8
    use mctc_env, only : error_type, fatal_error
-   use tblite_toml, only : toml_array, toml_table, toml_key, add_table, set_value, toml_error
-   use tblite_toml, only : toml_dump, add_array,  get_value, toml_parse
+   use tblite_toml, only : toml_array, toml_table, toml_key, add_table, set_value, toml_error, toml_dump, add_array,  get_value, toml_parse
    implicit none
    private
 
@@ -91,8 +90,8 @@ module tblite_double_dictionary
       procedure :: load_from_toml
       procedure :: load_from_file
       procedure :: load_from_unit
-
    end type double_dictionary_type
+
 
 contains
 
@@ -243,6 +242,7 @@ subroutine dump_to_toml(self, table, error)
    real(kind=wp), allocatable :: array1(:), array2(:, :), array3(:, :, :)
 
    integer :: i, stat, j
+
    do i = 1, self%get_n_entries()
       call add_array(table, self%record(i)%label, array)
 
@@ -274,9 +274,11 @@ subroutine dump_to_toml(self, table, error)
          deallocate(array3)
          cycle
       end if
+      
    end do
 
    deallocate(array1)
+
 end subroutine
 
 subroutine dump_to_file(self, file, error)
@@ -330,9 +332,11 @@ subroutine remove_entry_index(self, index)
    old_n = self%n
    self%n = self%n - 1
    
+   
    deallocate(self%record)
    allocate(self%record(self%n))
    it = 1
+   
    do i = 1, old_n
       if (i == index) cycle
       self%record(it) = tmp%record(i)

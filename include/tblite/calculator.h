@@ -149,6 +149,7 @@ tblite_set_calculator_save_integrals(tblite_context ctx,
                                      tblite_calculator calc,
                                      int save_integrals);
 
+
 /// Query calculator for the number of shells
 ///
 /// @param ctx: Context handle

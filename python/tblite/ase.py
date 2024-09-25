@@ -109,6 +109,8 @@ class TBLite(ase.calculators.calculator.Calculator):
         "charges",
         "dipole",
         "stress",
+        "ml_features",
+        "xtbml weights",
     ]
 
     default_parameters = {
@@ -256,8 +258,14 @@ class TBLite(ase.calculators.calculator.Calculator):
         try:
             _cell = self.atoms.cell
             _periodic = self.atoms.pbc
-            _charge = self._charge
-            _uhf = self._uhf
+            if hasattr(self.parameters, "charge"):
+                _charge = self.parameters.charge
+            else:
+                _charge = self.atoms.get_initial_charges().sum()
+            if hasattr(self.parameters, "uhf"):
+                _uhf = self.parameters.uhf
+            else:
+                _uhf = int(self.atoms.get_initial_magnetic_moments().sum().round())
 
             calc = Calculator(
                 self.parameters.method,
@@ -341,6 +349,11 @@ class TBLite(ase.calculators.calculator.Calculator):
         self.results["forces"] = -self._res.get("gradient") * Hartree / Bohr
         self.results["charges"] = self._res.get("charges")
         self.results["dipole"] = self._res.get("dipole") * Bohr
+        if self.parameters.ml_features != "":
+            self.results["ml features"] = self._res.get("ml features")
+            self.results["xtbml weights"] = self._res.get("xtbml weights")
+            self.results["ml labels"] = self._res.get("ml labels")
+        self.results["bond-orders"] = self._res.get("bond-orders")
         # stress tensor is only returned for periodic systems
         if self.atoms.pbc.any():
             _stress = self._res.get("virial") * Hartree / self.atoms.get_volume()

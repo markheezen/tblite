@@ -86,8 +86,8 @@ subroutine new_wavefunction(self, nat, nsh, nao, nspin, kt)
    allocate(self%n0at(nat))
    allocate(self%n0sh(nsh))
 
-   allocate(self%density(nao, nao, nspin))
-   allocate(self%coeff(nao, nao, nspin))
+   allocate(self%density(nao, nao, nspin), source=0.0_wp)
+   allocate(self%coeff(nao, nao, nspin), source=0.0_wp)
    allocate(self%emo(nao, nspin))
    allocate(self%focc(nao, nspin))
 
@@ -144,5 +144,6 @@ subroutine get_alpha_beta_occupation(nocc, nuhf, nalp, nbet)
    nalp = ntmp / 2 + diff
    nbet = ntmp / 2
 end subroutine get_alpha_beta_occupation
+
 
 end module tblite_wavefunction_type

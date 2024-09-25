@@ -391,18 +391,17 @@ subroutine export_gen_param(method, param)
 end subroutine export_gen_param
 
 
-subroutine new_gen_calculator(calc, method, mol, error)
+subroutine new_gen_calculator(calc, method, mol)
    type(xtb_calculator), intent(out) :: calc
    character(len=*), intent(in) :: method
    type(structure_type), intent(in) :: mol
-   type(error_type), allocatable, intent(out) :: error
    select case(method)
    case("gfn1")
-      call new_gfn1_calculator(calc, mol, error)
+      call new_gfn1_calculator(calc, mol)
    case("gfn2")
-      call new_gfn2_calculator(calc, mol, error)
+      call new_gfn2_calculator(calc, mol)
    case("ipea1")
-      call new_ipea1_calculator(calc, mol, error)
+      call new_ipea1_calculator(calc, mol)
    end select
 end subroutine new_gen_calculator
 
@@ -428,8 +427,7 @@ subroutine test_gen(mol, method, error)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
    call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy1, verbosity=0)
 
-   call new_gen_calculator(calc, method, mol, error)
-   if (allocated(error)) return
+   call new_gen_calculator(calc, method, mol)
 
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
    call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy2, verbosity=0)

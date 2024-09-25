@@ -23,6 +23,7 @@ CFFI generated wrappers.
 from typing import Any, Optional
 
 import numpy as np
+from typing import Any, Optional
 
 from . import library
 from .exceptions import TBLiteValueError
@@ -244,6 +245,8 @@ class Result:
         "post-processing-dict": library.get_post_processing_dict,
         "natoms": library.get_number_of_atoms,
         "norbitals": library.get_number_of_orbitals,
+        "post-processing-dict": library.get_post_processing_dict,
+        "post-processing" : library.get_post_processing_dict,
     }
     _setter = {}
 
@@ -262,26 +265,29 @@ class Result:
         Get a quantity stored instade the result container.
         The following quantities are available
 
-        ====================== ================================= ==============
-         property               dimension [spin-polarized case]   unit
-        ====================== ================================= ==============
-         energy                 scalar                            Hartree
-         energies               nat                               Hartree
-         gradient               nat, 3                            Hartree/Bohr
-         virial                 3, 3                              Hartree
-         charges                nat                               e
-         bond-orders            nat, nat                          e
-         dipole                 3                                 e·Bohr
-         quadrupole             6                                 e·Bohr²
-         orbital-energies       norb [2, norb]                    Hartree
-         orbital-occupations    norb [2, norb]                    e
-         orbital-coefficients   norb, norb [2, norb, norb]        unitless
-         overlap-matrix         norb, norb                        unitless
-         hamiltonian-matrix     norb, norb                        Hartree
-         density-matrix         norb, norb [2, norb, norb]        e
-         natoms                 scalar                            unitless
-         norbitals              scalar                            unitless
-        ====================== ================================= ==============
+        ====================== =========== ==============
+         property               dimension   unit
+        ====================== =========== ==============
+         energy                 scalar      Hartree
+         energies               nat         Hartree
+         gradient               nat, 3      Hartree/Bohr
+         virial                 3, 3        Hartree
+         charges                nat         e
+         bond-orders            nat, nat    e
+         dipole                 3           e·Bohr
+         quadrupole             6           e·Bohr²
+         orbital-energies       norb        Hartree
+         orbital-occupations    norb        e
+         orbital-coefficients   norb        unitless
+         overlap-matrix         norb, norb  unitless
+         hamiltonian-matrix     norb, norb  Hartree
+         density-matrix         norb, norb  e
+         ml features            nfeat, nat  /
+         xtbml weights          nat         unitless
+         ml labels              nfeat       string
+         natoms                 scalar      unitless
+         norbitals              scalar      unitless
+        ====================== =========== ==============
 
         Notes
         -----
@@ -462,11 +468,13 @@ class Calculator(Structure):
         "electric-field": library.new_electric_field,
         "spin-polarization": library.new_spin_polarization,
         "alpb-solvation": library.new_alpb_solvation,
-        "cpcm-solvation": library.new_cpcm_solvation,
+        "cpcm-solvation":  library.new_cpcm_solvation,
     }
     _post_processing = {
         "bond-orders" : "bond-orders",
         "molecular-multipoles" : "molmom",
+        "xtbml" : "xtbml",
+        "xtbml_xyz" : "xtbml_xyz"
     }
 
     def __init__(
@@ -511,6 +519,7 @@ class Calculator(Structure):
          save-integrals    Keep integral matrices in results    0 (False)
          temperature       Electronic temperature for filling   9.500e-4
          verbosity         Set verbosity of printout            1
+         xtbml             Set string of ml features to compute ""
         ================= ==================================== =================
 
         .. note::
@@ -551,13 +560,13 @@ class Calculator(Structure):
         elif interaction in self._post_processing:
             library.post_processing_push_back(self._ctx, self._calc, self._post_processing[interaction])
         elif ".toml" in interaction:
-            library.post_processing_push_back(self._ctx, self._calc, self._post_processing[interaction])
+            library.post_processing_push_back(self._ctx, self._calc, interaction)
         else:
             raise TBLiteValueError(
                 f"Interaction or post processing '{interaction}' is not supported in this calculator"
             )
-
-
+        
+        
 
     def get(self, attribute: str) -> Any:
         """
@@ -583,6 +592,18 @@ class Calculator(Structure):
             )
         return self._getter[attribute](self._ctx, self._calc)
 
+    def add_post_proc(self, post_processing: str = "") -> None:
+        """
+        Add post processing to the single point calculation. 
+        Methods can also be entered as a toml file. 
+        Supported post processing methods are:
+
+
+        """
+        self._post_proc = library.ffi.NULL
+        self._post_proc = library.new_post_processing(post_processing)
+        
+
     def singlepoint(self, res: Optional[Result] = None, copy: bool = False) -> Result:
         """
         Perform actual single point calculation in the library backend.
@@ -600,7 +621,7 @@ class Calculator(Structure):
 
         _res = Result(res) if copy or res is None else res
         library.get_singlepoint(self._ctx, self._mol, self._calc, _res._res)
-
+        
         return _res
 
 

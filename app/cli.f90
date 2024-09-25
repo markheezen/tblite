@@ -66,7 +66,7 @@ module tblite_cli
       character(len=:), allocatable :: json_output
       !> Input for solvation model
       type(solvation_input), allocatable :: solvation
-      !> Input for ml feature generation
+      !> Input for post processing container
       character(len=:), allocatable :: post_processing
       !> Numerical accuracy for self-consistent iterations
       real(wp) :: accuracy = 1.0_wp
@@ -75,13 +75,17 @@ module tblite_cli
       !> Electronic temperature
       real(wp) :: etemp = 300.0_wp
       !> Electronic temperature for the guess (currently only CEH)
-      real(wp) :: etemp_guess = 4000.0_wp
+      real(wp) :: etemp_guess = 5000.0_wp
       !> Electric field
       real(wp), allocatable :: efield(:)
       !> Spin polarization
       logical :: spin_polarized = .false.
       !> Algorithm for electronic solver
       integer :: solver = lapack_algorithm%gvd
+      !> Type of mixer
+      integer, allocatable :: mixer
+      !> Use of the ROKS method
+      logical, allocatable :: roks
    end type run_config
 
    !> Configuration for evaluating tight binding model on input structure
@@ -107,7 +111,7 @@ module tblite_cli
       !> File for output of JSON dump
       character(len=:), allocatable :: json_output
       !> Electronic temperature for the guess (currently only CEH)
-      real(wp) :: etemp_guess = 4000.0_wp
+      real(wp) :: etemp_guess = 5000.0_wp
       !> Electric field
       real(wp), allocatable :: efield(:)
       !> Algorithm for electronic solver
@@ -408,6 +412,20 @@ subroutine get_run_arguments(config, list, start, error)
          allocate(config%max_iter)
          call get_argument_as_int(arg, config%max_iter, error)
          if (allocated(error)) exit
+
+      case("--mixer")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         allocate(config%mixer)
+         call get_argument_as_int(arg, config%mixer, error)
+         if (allocated(error)) exit
+         if (config%mixer < 0 .or. config%mixer > 1) then
+            call fatal_error(error,"Mixer must be either 0 (Broyden) or 1 (DIIS)")
+         end if
+
+      case ("--roks")
+         iarg = iarg + 1
+         allocate(config%roks)
 
       case("--solver")
          iarg = iarg + 1
