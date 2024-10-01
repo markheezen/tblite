@@ -10,9 +10,9 @@ module tblite_mulliken_kfock
    use mullk_fockbuild, only : compute_gamma_fr, compute_gamma_rs, KFockSymSQM
    implicit none
    private
-   logical :: allowincr = .false.
+   logical :: allowincr = .true.
+   logical :: debug = .false.
    public :: new_mulliken_exchange
-   logical, parameter :: debug = .false.
 
    type,public, extends(exchange_type) :: mulliken_kfock_type
       !> allow single point precision, 0 false , 1 true
@@ -20,7 +20,7 @@ module tblite_mulliken_kfock
       !> wether the fock matrix is build in incremental fashion, 0 false, 1 true
       integer :: incremental
       !> fullrange scale for the K scale
-      real(wp) :: frscale
+      real(wp) :: frscale, exchangescale = -0.5_wp
       real(wp), allocatable :: omega, lrscale
       !> Averaging scheme for hardness:
       !> 0 = arith.
@@ -41,6 +41,8 @@ module tblite_mulliken_kfock
       integer, allocatable :: aonum(:)
       !> Convert from sh to at
       integer, allocatable :: sh2at(:)
+      !> Convert from ao to at
+      integer, allocatable :: ao2at(:)
       !> Compute gamma
       logical :: compute_gamma
       !>
@@ -177,13 +179,13 @@ subroutine new_range_separated_mulliken_k_fock(self, mol, hardness, allowsingle,
    integer :: exp
    logical :: incr
    type(basis_type) :: bas
-   incr = .false.
     allowincr = incr
    self%nao = bas%nao
-   allocate(self%aonum(bas%nsh), self%sh2at(bas%nsh))
+   allocate(self%aonum(bas%nsh), self%sh2at(bas%nsh),self%ao2at(self%nao))
    self%aonum = bas%nao_sh
    self%sh2at = bas%sh2at
    self%nsh = bas%nsh
+   self%ao2at = bas%ao2at
 
    if (allowsingle .eqv. .true.) then
       self%allowsingle = 1
@@ -205,7 +207,6 @@ subroutine new_range_separated_mulliken_k_fock(self, mol, hardness, allowsingle,
 
    self%average = average
    self%expsmooth = exp
-
    self%hardness = hardness
 
    self%label = label
@@ -235,21 +236,21 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
       allocate(ptr%gamma_(self%nao,self%nao))
       if (allocated(self%omega)) then
          call gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,&
-            & self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale, self%omega, self%frscale, ptr%gamma_)
+            & self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale * self%exchangescale, self%omega, self%frscale * self%exchangescale, ptr%gamma_)
       else
-         call  gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale, ptr%gamma_)
+         call  gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale * self%exchangescale , ptr%gamma_)
       end if
    end if
 
    if (allowincr) then
       if (.not.allocated(ptr%ref_D)) then
          !do full Fock build in double precision
-         if (debug) write(*,*) "Full K Build!"
+         if(debug) write(*,*) "Full K Build!"
          if (.not.allocated(ptr%prev_F)) allocate(ptr%prev_F(self%nao, self%nao),source = 0.0_wp)
          call KFockSymSQM(0, 0,self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, &
             & ptr%gamma_, wfn%density(:, :, 1), overlap, ptr%prev_F)
          if (.not.allocated(pot%kao)) allocate(pot%kao(self%nao,self%nao, 1))
-         pot%kao(:,:,1) = 0.5_wp * ptr%prev_F
+         pot%kao(:,:,1) = ptr%prev_F
 
          if (allocated(ptr%curr_D)) allocate(ptr%ref_D(self%nao, self%nao), source= wfn%density(:,:,1))
          if (.not.allocated(ptr%curr_D))allocate(ptr%curr_D(self%nao, self%nao), source= wfn%density(:,:,1))
@@ -259,7 +260,7 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
          pot%kao(:, :, 1) = ptr%prev_F
          call KFockSymSQM(1, 0,self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, &
             & ptr%gamma_, ptr%curr_D, overlap, pot%kao(:, :, 1))
-         pot%kao(:, :, 1) = 0.5_wp * (ptr%prev_F + pot%kao(:, :, 1))
+         pot%kao(:, :, 1) = (ptr%prev_F + pot%kao(:, :, 1))
          !ptr%prev_D = wfn%density(:,:,1)
 
 
@@ -270,8 +271,7 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
       call KFockSymSQM(0, 0,self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, &
          & ptr%gamma_, wfn%density(:, :, 1), overlap, ptr%prev_F)
       if (.not.allocated(pot%kao)) allocate(pot%kao(self%nao,self%nao, 1))
-      pot%kao(:,:,1) = 0.25_wp * ptr%prev_F
-
+      pot%kao(:,:,1) =  ptr%prev_F
       !if (allocated(ptr%curr_D)) allocate(ptr%ref_D(self%nao, self%nao), source= wfn%density(:,:,1))
       !if (.not.allocated(ptr%curr_D))allocate(ptr%curr_D(self%nao, self%nao), source= wfn%density(:,:,1))
    endif
@@ -290,17 +290,18 @@ subroutine get_energy(self, mol, cache, wfn ,energies)
    real(wp), intent(inout) :: energies(:)
    !> Reusable data container
    type(container_cache), intent(inout) :: cache
-
-   real(wp) :: temp(self%nao, self%nao)
    type(exchange_cache), pointer :: ptr
-   integer :: i
+   integer :: iao, jao, spin
 
    call view(cache, ptr)
-
-   call gemm(wfn%density(:,:,1),ptr%prev_F,temp, alpha=0.0625_wp,beta=0.0_wp)
-
-   do i =1, self%nao
-      energies = energies - temp(i,i)
+   !!$omp parallel do collapse(3) schedule(runtime) default(none) &
+   !!$omp reduction(+:energies) shared(ptr, wfn) private(spin, iao, jao)
+   do spin = 1, size(wfn%density, 3)
+      do iao = 1, size(wfn%density, 2)
+         do jao = 1, size(wfn%density, 1)
+            energies(self%ao2at(iao)) = energies(self%ao2at(iao)) + ptr%prev_F(jao, iao) * wfn%density(jao, iao, spin) * 0.5
+         end do
+      end do
    end do
 
 end subroutine get_energy
