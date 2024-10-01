@@ -424,7 +424,6 @@ subroutine get_run_arguments(config, list, start, error)
          end if
 
       case ("--roks")
-         iarg = iarg + 1
          allocate(config%roks)
 
       case("--solver")
