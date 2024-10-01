@@ -25,8 +25,7 @@ module tblite_scf_iterator
    use tblite_container, only : container_cache, container_list
    use tblite_disp, only : dispersion_type
    use tblite_integral_type, only : integral_type
-   use tblite_wavefunction_type, only : wavefunction_type, get_density_matrix
-   use tblite_wavefunction_fermi, only : get_fermi_filling
+   use tblite_wavefunction_type, only : wavefunction_type
    use tblite_wavefunction_mulliken, only : get_mulliken_shell_charges, &
       & get_mulliken_atomic_multipoles
    use tblite_xtb_coulomb, only : tb_coulomb
@@ -37,15 +36,14 @@ module tblite_scf_iterator
    use tblite_scf_info, only : scf_info
    use tblite_scf_potential, only : potential_type, add_pot_to_h1
    use tblite_scf_solver, only : solver_type
+   use tblite_scf_utils, only : get_electronic_energy, reduce, get_qat_from_qsh, &
+      & get_density, get_electronic_entropy
    use tblite_exchange_type, only : exchange_type
    use iso_c_binding
    implicit none
    private
 
-   public :: next_scf, get_electronic_energy, reduce
-   public :: get_density, get_qat_from_qsh
-
-   integer, parameter :: matrix_size = 6
+   public :: next_scf
 
 contains
 
@@ -99,6 +97,8 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
+   real(wp), dimension(bas%nao,bas%nao,1) :: coeff_1
+
    !we do this to check wether a density-based guess was used
    if (wfn%density(1, 1, 1) .ne. 0.0_wp) then
       call get_mulliken_shell_charges(bas, ints%overlap, wfn%density, wfn%n0sh, &
@@ -133,8 +133,6 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
    
-   
-   
    if (allocated(mixer%broyden) .and. iscf > 1) then
       call mixer%broyden%set(iscf, wfn, info, ints)
    end if
@@ -146,7 +144,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
       call mixer%diis%next(iscf)
       call mixer%diis%get(bas, wfn, info)
    endif
-   
+
    call get_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
    
@@ -186,111 +184,5 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
 
 end subroutine next_scf
-
-
-subroutine get_electronic_energy(h0, density, energies)
-   real(wp), intent(in) :: h0(:, :)
-   real(wp), intent(in) :: density(:, :, :)
-   real(wp), intent(inout) :: energies(:)
-
-   integer :: iao, jao, spin
-
-   !$omp parallel do collapse(3) schedule(runtime) default(none) &
-   !$omp reduction(+:energies) shared(h0, density) private(spin, iao, jao)
-   do spin = 1, size(density, 3)
-      do iao = 1, size(density, 2)
-         do jao = 1, size(density, 1)
-            energies(iao) = energies(iao) + h0(jao, iao) * density(jao, iao, spin)
-         end do
-      end do
-   end do
-end subroutine get_electronic_energy
-
-
-subroutine reduce(reduced, full, map)
-   real(wp), intent(inout) :: reduced(:)
-   real(wp), intent(in) :: full(:)
-   integer, intent(in) :: map(:)
-
-   integer :: ix
-
-   do ix = 1, size(map)
-      reduced(map(ix)) = reduced(map(ix)) + full(ix)
-   end do
-end subroutine reduce
-
-
-subroutine get_qat_from_qsh(bas, qsh, qat)
-   type(basis_type), intent(in) :: bas
-   real(wp), intent(in) :: qsh(:, :)
-   real(wp), intent(out) :: qat(:, :)
-
-   integer :: ish, ispin
-
-   qat(:, :) = 0.0_wp
-   !$omp parallel do schedule(runtime) collapse(2) default(none) &
-   !$omp reduction(+:qat) shared(bas, qsh) private(ish)
-   do ispin = 1, size(qsh, 2)
-      do ish = 1, size(qsh, 1)
-         qat(bas%sh2at(ish), ispin) = qat(bas%sh2at(ish), ispin) + qsh(ish, ispin)
-      end do
-   end do
-end subroutine get_qat_from_qsh
-
-subroutine get_density(wfn, solver, ints, ts, error)
-   !> Tight-binding wavefunction data
-   type(wavefunction_type), intent(inout) :: wfn
-   !> Solver for the general eigenvalue problem
-   class(solver_type), intent(inout) :: solver
-   !> Integral container
-   type(integral_type), intent(in) :: ints
-   !> Electronic entropy
-   real(wp), intent(out) :: ts
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   real(wp) :: e_fermi, stmp(2)
-   real(wp), allocatable :: focc(:)
-   integer :: spin
-
-   select case(wfn%nspin)
-   case default
-      call solver%solve(wfn%coeff(:, :, 1), ints%overlap, wfn%emo(:, 1), error)
-      if (allocated(error)) return
-
-      allocate(focc(size(wfn%focc, 1)))
-      wfn%focc(:, :) = 0.0_wp
-      do spin = 1, 2
-         call get_fermi_filling(wfn%nel(spin), wfn%kt, wfn%emo(:, 1), &
-            & wfn%homo(spin), focc, e_fermi)
-         call get_electronic_entropy(focc, wfn%kt, stmp(spin))
-         wfn%focc(:, 1) = wfn%focc(:, 1) + focc
-      end do
-      ts = sum(stmp)
-
-      call get_density_matrix(wfn%focc(:, 1), wfn%coeff(:, :, 1), wfn%density(:, :, 1))
-   case(2)
-      wfn%coeff = 2*wfn%coeff
-      do spin = 1, 2
-         call solver%solve(wfn%coeff(:, :, spin), ints%overlap, wfn%emo(:, spin), error)
-         if (allocated(error)) return
-
-         call get_fermi_filling(wfn%nel(spin), wfn%kt, wfn%emo(:, spin), &
-            & wfn%homo(spin), wfn%focc(:, spin), e_fermi)
-         call get_electronic_entropy(wfn%focc(:, spin), wfn%kt, stmp(spin))
-         call get_density_matrix(wfn%focc(:, spin), wfn%coeff(:, :, spin), &
-            & wfn%density(:, :, spin))
-      end do
-      ts = sum(stmp)
-   end select
-end subroutine get_density
-
-subroutine get_electronic_entropy(occ, kt, s)
-   real(wp), intent(in) :: occ(:)
-   real(wp), intent(in) :: kt
-   real(wp), intent(out) :: s
-
-   s = sum(log(occ ** occ * (1 - occ) ** (1 - occ))) * kt
-end subroutine get_electronic_entropy
 
 end module tblite_scf_iterator

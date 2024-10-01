@@ -48,8 +48,6 @@ module tblite_scf_mixer
       procedure(diff), deferred :: diff
       !> Get mixed object
       procedure(get), deferred :: get
-      !> Get error metric from mixing
-      ! procedure(get_error), deferred :: get_error
    end type mixer_type
 
    abstract interface
@@ -96,14 +94,12 @@ module tblite_scf_mixer
       type(c_ptr), value, intent(in) :: mixer
       integer(c_int), value, intent(in) :: iter
    end subroutine next_mixer
-
    end interface
-
-   
+ 
    contains
 
    subroutine next(self, iter)
-      !> Broyden object
+      !> Mixer object
       class(mixer_type), intent(inout) :: self
       !> SCF Iteration
       integer, intent(in) :: iter

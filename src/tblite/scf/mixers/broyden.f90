@@ -27,7 +27,7 @@ module tblite_scf_mixer_broyden
    use mctc_io, only : structure_type
    use tblite_scf_info, only : scf_info
    use tblite_integral_type, only : integral_type
-!    use tblite_scf_iterator, only: get_qat_from_qsh
+   use tblite_scf_utils, only: get_qat_from_qsh
    use iso_c_binding
    implicit none
 
@@ -84,7 +84,7 @@ module tblite_scf_mixer_broyden
 contains
 
    !> Create a new instance of the Broyden mixer
-   subroutine new_broyden(self, mol, calc, info)
+   subroutine new_broyden(self, mol, calc, info, roks)
       !> Broyden object
       class(broyden_type), intent(out) :: self
       !> Molecular structure data
@@ -93,8 +93,11 @@ contains
       type(xtb_calculator), intent(in) :: calc
       !> Info data
       type(scf_info) :: info
+      !> ROKS method
+      logical, optional :: roks
 
       self%ndim = self%get_dimension(mol,calc%bas,info)
+      if (present(roks)) self%ndim = self%ndim * 4
       self%memory = calc%max_iter
       self%ptr = c_new_broyden(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_broyden
@@ -225,23 +228,5 @@ contains
          call get_mixer_data(self%ptr, wfn%qpat, size(wfn%qpat))
       end select
    end subroutine get_broyden
-
-   !! It's now here to prevent a circular import -> I still have to find a better solution for this
-   subroutine get_qat_from_qsh(bas, qsh, qat)
-    type(basis_type), intent(in) :: bas
-    real(wp), intent(in) :: qsh(:, :)
-    real(wp), intent(out) :: qat(:, :)
-
-    integer :: ish, ispin
-
-    qat(:, :) = 0.0_wp
-    !$omp parallel do schedule(runtime) collapse(2) default(none) &
-    !$omp reduction(+:qat) shared(bas, qsh) private(ish)
-    do ispin = 1, size(qsh, 2)
-       do ish = 1, size(qsh, 1)
-          qat(bas%sh2at(ish), ispin) = qat(bas%sh2at(ish), ispin) + qsh(ish, ispin)
-       end do
-    end do
- end subroutine get_qat_from_qsh
 
 end module tblite_scf_mixer_broyden

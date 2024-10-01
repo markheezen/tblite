@@ -15,7 +15,7 @@ module tblite_xtbml_energy_features
    use tblite_xtb_calculator, only : xtb_calculator
   use tblite_repulsion, only : tb_repulsion
   use tblite_xtb_coulomb, only : tb_coulomb
-  use tblite_scf_iterator, only : get_electronic_energy, reduce
+  use tblite_scf_utils, only : get_electronic_energy, reduce
   use tblite_disp_d3, only : d3_dispersion, new_d3_dispersion
   use tblite_classical_halogen, only : halogen_correction
   use tblite_disp_d4, only : d4_dispersion, new_d4_dispersion

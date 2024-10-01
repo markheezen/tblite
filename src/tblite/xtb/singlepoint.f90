@@ -67,24 +67,23 @@ module tblite_xtb_singlepoint
       label_electronic = "electronic energy", &
       label_total = "total energy"
 
-   interface get_error
-      real function get_error_sp(mixer,dummy,iter) bind(C,name="GetErrorDP")
+      interface get_error
+      real function get_error_sp(mixer,iter,dummy) bind(C,name="GetErrorSP")
          use iso_c_binding
          use mctc_env, only : sp
          type(c_ptr), value :: mixer
-         real(sp), value :: dummy
          integer(c_int), value :: iter
+         real(c_float), value :: dummy
       end function get_error_sp
-
-      double precision function get_error_dp(mixer,dummy,iter) bind(C,name="GetErrorDP")
+   
+      double precision function get_error_dp(mixer,iter,dummy) bind(C,name="GetErrorDP")
          use iso_c_binding
          use mctc_env, only : dp
          type(c_ptr), value :: mixer
-         real(dp), value :: dummy
          integer(c_int), value :: iter
+         real(c_double), value :: dummy
       end function get_error_dp
    end interface
-   integer, parameter :: matrix_size = 6
 contains
 
 
@@ -279,7 +278,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
          & calc%coulomb, calc%dispersion, calc%interactions, calc%exchange, ints, pot, &
          & ccache, dcache, icache, ecache, eelec, error)
       econverged = abs(sum(eelec) - elast) < econv
-      pconverged = abs(get_error(mixer%currptr,err,iscf)) < pconv
+      pconverged = abs(get_error(mixer%currptr,iscf,elast)) < pconv
       converged = econverged .and. pconverged
       if (prlevel > 0) then
          call ctx%message(format_string(iscf, "(i7)") // &
@@ -287,7 +286,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
             & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
             & format_string(sum(eelec) - elast, "(es16.7)") // &
             & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
-            & format_string(get_error(mixer%currptr,err,iscf), "(es16.7)") // &
+            & format_string(get_error(mixer%currptr,iscf,elast), "(es16.7)") // &
             & escape(ctx%terminal%reset))
       end if 
       if (allocated(error)) then
@@ -306,8 +305,6 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       results%energies = energies
    end if
    call timer%pop
-
-   
 
    if (prlevel > 1) then
       call ctx%message(label_electronic // format_string(sum(eelec), real_format) // " Eh")
@@ -381,7 +378,6 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       allocate(results%dict)
       if (present(post_process)) then
          call post_process%pack_res(mol, results)
-         ! if (prlevel > 1 ) call results%dict%dump("post_processing.toml", error)
       end if
    end if
 

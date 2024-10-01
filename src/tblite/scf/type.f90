@@ -52,7 +52,7 @@ module tblite_scf_mixers
    end interface
 
 contains
-   subroutine setup(self, mixer_type, mol, calc, info)
+   subroutine setup(self, mixer_type, mol, calc, info, roks)
       !> Mixers object
       class(mixers_type), intent(inout) :: self
       !> Type(s) of self-consistent iteration mixing (0: Broyden, 1: DIIS)
@@ -63,13 +63,13 @@ contains
       type(xtb_calculator), intent(in) :: calc
       !> Info data
       type(scf_info) :: info
-
-      integer :: i
+      !> ROKS method employed
+      logical, optional :: roks
 
       select case (mixer_type)
        case(0)
         allocate(self%broyden)
-        call new_broyden(self%broyden, mol, calc, info)
+        call new_broyden(self%broyden, mol, calc, info, roks)
         self%currptr=self%broyden%ptr
        case(1)
         allocate(self%diis)

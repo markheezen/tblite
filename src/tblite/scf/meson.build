@@ -23,4 +23,5 @@ srcs += files(
   'potential.f90',
   'solver.f90',
   'type.f90',
+  'utils.f90'
 )
