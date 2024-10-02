@@ -98,7 +98,7 @@ contains
 
       self%ndim = self%get_dimension(mol,calc%bas,info)
       if (present(roks)) self%ndim = self%ndim * 4
-      self%memory = calc%max_iter
+      self%memory = calc%mixer_mem
       self%ptr = c_new_broyden(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_broyden
 

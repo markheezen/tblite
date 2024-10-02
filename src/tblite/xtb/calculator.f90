@@ -87,6 +87,8 @@ module tblite_xtb_calculator
       type(container_list), allocatable :: interactions
       !> Type of self-consistent iteration mixing (0: Broyden, 1: DIIS)
       integer, allocatable :: mixer_type
+      !> Memory of the mixer
+      integer :: mixer_mem
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info

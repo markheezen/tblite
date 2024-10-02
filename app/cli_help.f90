@@ -128,8 +128,9 @@ module tblite_cli_help
       "--cpcm <real>              Use polarizable continuum solvation model."//nl//&
       "                           Solvent is specified by dielectric constant."//nl//&
       "      --spin-polarized     Use spin-polarized xTB Hamiltonian"//nl//&
-      "--mixer <int>(,<int>)      Set the type of convergence accelerator(s) (mixers),"//nl//&
+      "--mixer <int>              Set the type of convergence accelerator (mixer),"//nl//&
       "                           It can be Broyden (0), or DIIS (1)."//nl//&
+      "--mixem <int>              Set the number of past iterations to use by the mixer."//nl//&
       "--post-processing <file>   Add post processing methods to the calculation"//nl//&
       "                           by using a toml file as input."//nl//&
       "--post-processing <name>   Add post processing methods to the calculation,"//nl//&
