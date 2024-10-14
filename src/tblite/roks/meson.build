@@ -16,5 +16,4 @@
 
 srcs += files(
   'roks.f90',
-  'type.f90',
 )

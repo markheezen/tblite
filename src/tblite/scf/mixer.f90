@@ -42,7 +42,7 @@ module tblite_scf_mixer
    contains
       !> Apply mixing to the density
       procedure :: next
-      !> Set new object to mix
+      !> Set object to mix
       procedure(set), deferred :: set
       !> Set difference between two consecutive objects to mix
       procedure(diff), deferred :: diff

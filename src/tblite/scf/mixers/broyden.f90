@@ -43,8 +43,6 @@ module tblite_scf_mixer_broyden
       procedure :: diff => diff_broyden
       !> Get mixed object
       procedure :: get => get_broyden
-      !> Get error metric from mixing
-    !   procedure :: get_error
    end type broyden_type
 
    interface

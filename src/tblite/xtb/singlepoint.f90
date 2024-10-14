@@ -76,7 +76,7 @@ module tblite_xtb_singlepoint
          real(c_float), value :: dummy
       end function get_error_sp
    
-      double precision function get_error_dp(mixer,iter,dummy) bind(C,name="GetErrorDP")
+      double precision function get_error_dp(mixer,iter,dummy) bind(C,name="GetError")
          use iso_c_binding
          use mctc_env, only : dp
          type(c_ptr), value :: mixer

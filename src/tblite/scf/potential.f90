@@ -29,6 +29,7 @@ module tblite_scf_potential
    private
 
    public :: new_potential, add_pot_to_h1
+   public :: add_vat_to_vsh, add_vsh_to_vao, add_vao_to_h1, add_vmp_to_h1, add_kao_to_h1
 
 
    !> Container for density dependent potential-shifts

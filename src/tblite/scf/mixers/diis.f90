@@ -35,15 +35,12 @@ module tblite_scf_mixer_diis
    contains
       !> Set new object to mix
       procedure :: set => set_diis
-        !> Set difference between two consecutive objects to mix
+      !> Set difference between two consecutive objects to mix
       procedure :: diff => diff_diis
       !> Get mixed object
       procedure :: get => get_diis
-      !> Get error metric from mixing
-    !   procedure :: get_error
-
-      !> Calculate error vector
-      procedure :: calc_error
+      !> Construct the error vector
+      procedure :: construct_error
    end type diis_type
 
    interface
@@ -55,20 +52,22 @@ module tblite_scf_mixer_diis
          integer(c_int), value :: nao
       end function c_new_diis
 
-      subroutine c_calc_error(mixer) bind(C,name="CalcError")
+      subroutine construct_error_vec(mixer,fock,density,overlap) bind(C,name="ConstructError")
          use iso_c_binding
+         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-      end subroutine c_calc_error
+         real(wp), intent(in) :: fock(*)
+         real(wp), intent(in) :: density(*)
+         real(wp), intent(in) :: overlap(*)
+      end subroutine construct_error_vec
 
-      subroutine set_fds(mixer,iscf,fock,density,overlap) bind(C,name="SetFDS")
+      subroutine set_q(mixer,iscf,fock) bind(C,name="SetQ")
          use iso_c_binding
          use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
          integer, intent(in), value :: iscf
          real(wp), intent(in) :: fock(*)
-         real(wp), intent(in) :: density(*)
-         real(wp), intent(in) :: overlap(*)
-      end subroutine set_fds
+      end subroutine set_q
 
       subroutine get_mixer_data(mixer,target,size) bind(C,name="GetData")
         use iso_c_binding
@@ -90,7 +89,7 @@ module tblite_scf_mixer_diis
 contains
    !> Create a new instance of the DIIS mixer
    subroutine new_diis(self, mol, calc, info)
-      !> Broyden object
+      !> DIIS object
       class(diis_type), intent(out) :: self
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
@@ -104,26 +103,38 @@ contains
       self%ptr = c_new_diis(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_diis
 
+   !> Set the error vector used for mixing
+   subroutine construct_error(self, wfn, info, ints)
+      !> Instance of the DIIS mixer
+      class(diis_type), intent(inout) :: self
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
+      !> Info data
+      type(scf_info) :: info
+      !> Integral container
+      type(integral_type), intent(in) :: ints
+
+      call construct_error_vec(self%ptr,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
+   end subroutine construct_error
+
    !> Set the vector to mix
    subroutine set_diis(self, iscf, wfn, info, ints)
-    use tblite_scf_info, only : atom_resolved, shell_resolved
-    !> Instance of the Broyden mixer
-    class(diis_type), intent(inout) :: self
-    !> Current iteration count
-    integer, intent(inout) :: iscf
-    !> Wavefunction data
-    type(wavefunction_type), intent(inout) :: wfn
-    !> Info data
-    type(scf_info) :: info
-    !> Integral container
-    type(integral_type), intent(in) :: ints
-
-      call set_fds(self%ptr,iscf,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
+      !> Instance of the DIIS mixer
+      class(diis_type), intent(inout) :: self
+      !> Current iteration count
+      integer, intent(inout) :: iscf
+      !> Wavefunction data
+      type(wavefunction_type), intent(inout) :: wfn
+      !> Info data
+      type(scf_info) :: info
+      !> Integral container
+      type(integral_type), intent(in) :: ints
+  
+      call set_q(self%ptr,iscf,wfn%coeff(:,:,1))
    end subroutine set_diis
 
    !> Get the differences of the mixed vector
    subroutine diff_diis(self, wfn, info)
-      use tblite_scf_info, only : atom_resolved, shell_resolved
       !> Instance of the DIIS mixer
       class(diis_type), intent(inout) :: self
       !> Wavefunction data
@@ -136,7 +147,6 @@ contains
 
 !> Get the mixed vector
    subroutine get_diis(self, bas, wfn, info)
-      use tblite_scf_info, only : atom_resolved, shell_resolved
       !> Instance of the DIIS mixer
       class(diis_type), intent(inout) :: self
       !> Basis functions data
@@ -148,13 +158,5 @@ contains
 
       call get_mixer_data(self%ptr,wfn%coeff(:,:,1),size(wfn%coeff(:,:,1)))
    end subroutine get_diis
-
-   !> Calculate the error vector
-   subroutine calc_error(self)
-      !> Instance of the DIIS mixer
-      class(diis_type), intent(inout) :: self
-      
-      call c_calc_error(self%ptr)
-   end subroutine
 
 end module tblite_scf_mixer_diis

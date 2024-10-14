@@ -97,8 +97,6 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   real(wp), dimension(bas%nao,bas%nao,1) :: coeff_1
-
    !we do this to check wether a density-based guess was used
    if (wfn%density(1, 1, 1) .ne. 0.0_wp) then
       call get_mulliken_shell_charges(bas, ints%overlap, wfn%density, wfn%n0sh, &
@@ -140,7 +138,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    if (allocated(mixer%diis)) call mixer%diis%set(iscf, wfn, info, ints)
 
    if (allocated(mixer%diis) .and. iscf > 1) then
-      call mixer%diis%calc_error()
+      call mixer%diis%construct_error(wfn, info, ints)
       call mixer%diis%next(iscf)
       call mixer%diis%get(bas, wfn, info)
    endif

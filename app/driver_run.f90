@@ -279,8 +279,7 @@ subroutine run_main(config, error)
    end if
 
    if (allocated(config%roks)) then
-      call roks_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-      & config%verbosity, results, post_proc)
+      call roks_singlepoint(ctx)
    else
       call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
          & config%verbosity, results, post_proc)
