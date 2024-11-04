@@ -19,7 +19,7 @@ module tblite_exchange_type
    end type exchange_type
 contains
 
-   !> Evaluate charge dependent potential shift from the interaction
+!> Evaluate charge dependent potential shift from the interaction
 subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
    !> Instance of the interaction container
    class(exchange_type), intent(in) :: self
@@ -35,7 +35,7 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
    real(wp), intent(in) :: overlap(:,:)
 end subroutine get_potential_w_overlap
 
-subroutine get_gradient_w_overlap(self, mol, cache, wfn, gradient, sigma, overlap)
+subroutine get_gradient_w_overlap(self, mol, cache, wfn, gradient, ao_grad, overlap)
    !> Instance of the interaction container
    class(exchange_type), intent(in) :: self
    !> Molecular structure data
@@ -44,10 +44,10 @@ subroutine get_gradient_w_overlap(self, mol, cache, wfn, gradient, sigma, overla
    type(container_cache), intent(inout) :: cache
    !> Wavefunction data
    type(wavefunction_type), intent(in) :: wfn
-    !> Molecular gradient of the exchange energy
+   !> Molecular gradient of the exchange energy
    real(wp), contiguous, intent(inout) :: gradient(:, :)
-   !> Strain derivatives of the exchange energy
-   real(wp), contiguous, intent(inout) :: sigma(:, :)
+   !> AO derivatives to be added to energy-weighted density
+   real(wp), contiguous, intent(inout) :: ao_grad(:, :)
    !> Overlap integral matrix
    real(wp), intent(in) :: overlap(:,:)
 end subroutine get_gradient_w_overlap

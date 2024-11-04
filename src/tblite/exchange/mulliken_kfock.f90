@@ -7,7 +7,7 @@ module tblite_mulliken_kfock
    use tblite_container_cache, only : container_cache
    use tblite_exchange_cache, only : exchange_cache
    use tblite_basis_type, only : basis_type
-   use mullk_fockbuild, only : compute_gamma_fr, compute_gamma_rs, KFockSymSQM
+   use mullk_fockbuild, only : compute_gamma_fr, compute_gamma_rs, KFockSymSQM, indexer_type
    implicit none
    private
    logical :: allowincr = .true.
@@ -45,6 +45,9 @@ module tblite_mulliken_kfock
       integer, allocatable :: ao2at(:)
       !> Compute gamma
       logical :: compute_gamma
+      !> indexer object needed for computing gamma and computing grad 
+      type(indexer_type) :: indexer
+      real(wp), allocatable :: gamma_(:,:)
       !>
    contains
       !> Update container cache
@@ -211,6 +214,17 @@ subroutine new_range_separated_mulliken_k_fock(self, mol, hardness, allowsingle,
 
    self%label = label
 
+   if (.not.allocated(self%gamma_)) then
+      allocate(self%gamma_(self%nao,self%nao))
+      if (allocated(self%omega)) then
+         call gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,&
+            & self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale * self%exchangescale, self%omega, self%frscale * self%exchangescale, self%gamma_, self%indexer)
+      else
+         call  gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale * self%exchangescale , self%gamma_, self%indexer)
+      end if
+   end if
+
+   
 end subroutine new_range_separated_mulliken_k_fock
 
 
@@ -234,20 +248,16 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
 
    if (.not.allocated(ptr%gamma_)) then
       allocate(ptr%gamma_(self%nao,self%nao))
-      if (allocated(self%omega)) then
-         call gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,&
-            & self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale * self%exchangescale, self%omega, self%frscale * self%exchangescale, ptr%gamma_)
-      else
-         call  gamma(self%nao, mol%nat, self%nsh, self%aonum, self%sh2at,self%average, self%expsmooth, mol%xyz, self%hardness, self%frscale * self%exchangescale , ptr%gamma_)
-      end if
+      ptr%gamma_ = self%gamma_
    end if
+
 
    if (allowincr) then
       if (.not.allocated(ptr%ref_D)) then
          !do full Fock build in double precision
          if(debug) write(*,*) "Full K Build!"
          if (.not.allocated(ptr%prev_F)) allocate(ptr%prev_F(self%nao, self%nao),source = 0.0_wp)
-         call KFockSymSQM(0, 0,self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, &
+         call KFockSymSQM(0, 0,self%indexer, &
             & ptr%gamma_, wfn%density(:, :, 1), overlap, ptr%prev_F)
          if (.not.allocated(pot%kao)) allocate(pot%kao(self%nao,self%nao, 1))
          pot%kao(:,:,1) = ptr%prev_F
@@ -258,7 +268,7 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
       else
          ptr%curr_D = wfn%density(:,:,1) - ptr%ref_D
          pot%kao(:, :, 1) = ptr%prev_F
-         call KFockSymSQM(1, 0,self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, &
+         call KFockSymSQM(1, 0,self%indexer, &
             & ptr%gamma_, ptr%curr_D, overlap, pot%kao(:, :, 1))
          pot%kao(:, :, 1) = (ptr%prev_F + pot%kao(:, :, 1))
          !ptr%prev_D = wfn%density(:,:,1)
@@ -268,7 +278,7 @@ subroutine get_potential_w_overlap(self, mol, cache, wfn, pot, overlap)
    else
       if (debug) write(*,*) "Full K Build!"
       if (.not.allocated(ptr%prev_F)) allocate(ptr%prev_F(self%nao, self%nao),source = 0.0_wp)
-      call KFockSymSQM(0, 0,self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, &
+      call KFockSymSQM(0, 0,self%indexer, &
          & ptr%gamma_, wfn%density(:, :, 1), overlap, ptr%prev_F)
       if (.not.allocated(pot%kao)) allocate(pot%kao(self%nao,self%nao, 1))
       pot%kao(:,:,1) =  ptr%prev_F
@@ -306,7 +316,7 @@ subroutine get_energy(self, mol, cache, wfn ,energies)
 
 end subroutine get_energy
 
-subroutine get_gradient_w_overlap(self, mol, cache, wfn, gradient, sigma, overlap)
+subroutine get_gradient_w_overlap(self, mol, cache, wfn, gradient, ao_grad, overlap)
    !> Instance of the exchange container
    class(mulliken_kfock_type), intent(in) :: self
    !> Molecular structure data
@@ -318,17 +328,26 @@ subroutine get_gradient_w_overlap(self, mol, cache, wfn, gradient, sigma, overla
    !> Molecular gradient of the exchange energy
    real(wp), contiguous, intent(inout) :: gradient(:, :)
    !> Strain derivatives of the exchange energy
-   real(wp), contiguous, intent(inout) :: sigma(:, :)
+   real(wp), contiguous, intent(inout) :: ao_grad(:, :)
    !> Overlap
    real(wp), intent(in) :: overlap(:,:)
+   real(wp), allocatable :: intermediate(:, :)
+   real(wp), allocatable :: grad_before(:, :)
 
    type(exchange_cache), pointer :: ptr
-   integer :: i
+   integer :: spin
 
    call view(cache, ptr)
-
-   call KGradSymSQM(0, self%nao, mol%nat, self%nsh, self%aonum, self%sh2at, ptr%gamma_, &
-      & wfn%density(:, :, 1), overlap, sigma, gradient)
+   allocate(intermediate(self%nao, self%nao), source=0.0_wp)
+   !do spin = 1, size(wfn%density, 3) 
+      call KGradSymSQM(0, self%nao ,ptr%gamma_, wfn%density(:, :, 1), overlap, ao_grad, intermediate)
+      allocate(grad_before(self%nao, self%nao), source= gradient)
+      
+   if (allocated(self%omega)) then 
+      call GammaGradSQM_rs(self%indexer, mol%xyz, self%hardness, self%frscale * self%exchangescale, self%omega, self%lrscale, intermediate, gradient)
+   else
+      call GammaGradSQM_fr(self%indexer, mol%xyz, self%hardness, self%frscale * self%exchangescale, intermediate, gradient)
+   endif
 
 
 
@@ -341,7 +360,7 @@ pure function variable_info(self) result(info)
    !> Information on the required potential data
    type(scf_info) :: info
 
-   info = scf_info(charge=not_used ,dipole=not_used, quadrupole=not_used, density=orbital_resolved)
+   info = scf_info(charge=not_used, dipole=not_used, quadrupole=not_used, density=orbital_resolved)
 end function variable_info
 
 end module tblite_mulliken_kfock
