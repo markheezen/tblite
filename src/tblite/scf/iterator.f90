@@ -29,15 +29,12 @@ module tblite_scf_iterator
    use tblite_wavefunction_mulliken, only : get_mulliken_shell_charges, &
       & get_mulliken_atomic_multipoles
    use tblite_xtb_coulomb, only : tb_coulomb
-   use tblite_scf_mixer, only: mixer_type
    use tblite_scf_mixers, only: mixers_type
-   use tblite_scf_mixer_broyden, only: broyden_type
-   use tblite_scf_mixer_diis, only: diis_type
    use tblite_scf_info, only : scf_info
    use tblite_scf_potential, only : potential_type, add_pot_to_h1
    use tblite_scf_solver, only : solver_type
    use tblite_scf_utils, only : get_electronic_energy, reduce, get_qat_from_qsh, &
-      & get_density, get_electronic_entropy
+      & get_density
    use tblite_exchange_type, only : exchange_type
    use iso_c_binding
    implicit none
@@ -112,7 +109,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
 
    if (allocated(mixer%broyden) .and. iscf > 1) then
       call mixer%broyden%next(iscf)
-      call mixer%broyden%get(bas, wfn, info)
+      call mixer%broyden%get(wfn%qat, wfn%qsh, wfn%dpat, wfn%qpat, info)
    end if 
    
    call pot%reset
@@ -132,15 +129,15 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
    
    if (allocated(mixer%broyden) .and. iscf > 1) then
-      call mixer%broyden%set(iscf, wfn, info, ints)
+      call mixer%broyden%set(wfn%qat, wfn%qsh, wfn%dpat, wfn%qpat, info)
    end if
 
-   if (allocated(mixer%diis)) call mixer%diis%set(iscf, wfn, info, ints)
+   if (allocated(mixer%diis)) call mixer%diis%set(iscf, wfn%coeff(:,:,1))
 
    if (allocated(mixer%diis) .and. iscf > 1) then
-      call mixer%diis%construct_error(wfn, info, ints)
+      call mixer%diis%construct_error(wfn%coeff(:,:,1), wfn%density(:,:,1), ints%overlap)
       call mixer%diis%next(iscf)
-      call mixer%diis%get(bas, wfn, info)
+      call mixer%diis%get(wfn%coeff(:,:,1))
    endif
 
    call get_density(wfn, solver, ints, ts, error)
@@ -156,11 +153,11 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
       & wfn%qpat)
 
    if (allocated(mixer%broyden)) then 
-      call mixer%broyden%diff(wfn, info)
+      call mixer%broyden%diff(wfn%qat, wfn%qsh, wfn%dpat, wfn%qpat, info)
    end if
 
    if (allocated(mixer%diis) .and. iscf == 1) then
-      call mixer%diis%diff(wfn, info)
+      call mixer%diis%diff(wfn%coeff(:,:,1))
    end if
    
    allocate(eao(bas%nao), source=0.0_wp)

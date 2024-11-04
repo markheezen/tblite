@@ -19,15 +19,11 @@
 
 !> Provides an electronic mixer implementation
 module tblite_scf_mixer_broyden
-   use mctc_env, only : wp
    use tblite_scf_mixer
    use tblite_basis_type, only : basis_type
    use tblite_xtb_calculator, only : xtb_calculator
-   use tblite_wavefunction, only : wavefunction_type
    use mctc_io, only : structure_type
    use tblite_scf_info, only : scf_info
-   use tblite_integral_type, only : integral_type
-   use tblite_scf_utils, only: get_qat_from_qsh
    use iso_c_binding
    implicit none
 
@@ -36,13 +32,13 @@ module tblite_scf_mixer_broyden
 
    contains
       !> Get dimension of object to mix
-      procedure :: get_dimension
+      procedure, private :: get_dimension
       !> Set new object to mix
-      procedure :: set => set_broyden
+      procedure :: set => set_broyden_dp, set_broyden_sp
       !> Set difference between two consecutive objects to mix
-      procedure :: diff => diff_broyden
+      procedure :: diff => diff_broyden_dp, diff_broyden_sp
       !> Get mixed object
-      procedure :: get => get_broyden
+      procedure :: get => get_broyden_dp, get_broyden_sp
    end type broyden_type
 
    interface
@@ -54,35 +50,53 @@ module tblite_scf_mixer_broyden
          integer(c_int), value :: nao
       end function c_new_broyden
 
-      subroutine set_mixer_data(mixer,target,size) bind(C,name="SetData")
+      subroutine set_mixer_data_dp(mixer,target,size) bind(C,name="SetDataDP")
          use iso_c_binding
-         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-         real(wp), intent(in) :: target(*)
+         real(c_double), intent(in) :: target(*)
          integer(c_int), value, intent(in) :: size
-      end subroutine set_mixer_data
+      end subroutine set_mixer_data_dp
 
-      subroutine get_mixer_data(mixer,target,size) bind(C,name="GetData")
-        use iso_c_binding
-        use mctc_env, only : wp
-        type(c_ptr), value, intent(in) :: mixer
-        real(wp), intent(inout) :: target(*)
-        integer(c_int), value, intent(in) :: size
-     end subroutine get_mixer_data
+      subroutine set_mixer_data_sp(mixer,target,size) bind(C,name="SetDataSP")
+         use iso_c_binding
+         type(c_ptr), value, intent(in) :: mixer
+         real(c_float), intent(in) :: target(*)
+         integer(c_int), value, intent(in) :: size
+      end subroutine set_mixer_data_sp
 
-     subroutine diff_mixer_data(mixer,target,size) bind(C,name="DiffData")
+      subroutine get_mixer_data_dp(mixer,target,size) bind(C,name="GetDataDP")
         use iso_c_binding
-        use mctc_env, only : wp
         type(c_ptr), value, intent(in) :: mixer
-        real(wp), intent(in) :: target(*)
+        real(c_double), intent(inout) :: target(*)
         integer(c_int), value, intent(in) :: size
-     end subroutine diff_mixer_data
+     end subroutine get_mixer_data_dp
+
+     subroutine get_mixer_data_sp(mixer,target,size) bind(C,name="GetDataSP")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      real(c_float), intent(inout) :: target(*)
+      integer(c_int), value, intent(in) :: size
+   end subroutine get_mixer_data_sp
+
+     subroutine diff_mixer_data_dp(mixer,target,size) bind(C,name="DiffDataDP")
+        use iso_c_binding
+        type(c_ptr), value, intent(in) :: mixer
+        real(c_double), intent(in) :: target(*)
+        integer(c_int), value, intent(in) :: size
+     end subroutine diff_mixer_data_dp
+
+     subroutine diff_mixer_data_sp(mixer,target,size) bind(C,name="DiffDataSP")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      real(c_float), intent(in) :: target(*)
+      integer(c_int), value, intent(in) :: size
+   end subroutine diff_mixer_data_sp
    end interface
 
 contains
 
    !> Create a new instance of the Broyden mixer
-   subroutine new_broyden(self, mol, calc, info, roks)
+   subroutine new_broyden(self, mol, calc, info)
       !> Broyden object
       class(broyden_type), intent(out) :: self
       !> Molecular structure data
@@ -91,11 +105,8 @@ contains
       type(xtb_calculator), intent(in) :: calc
       !> Info data
       type(scf_info) :: info
-      !> ROKS method
-      logical, optional :: roks
 
       self%ndim = self%get_dimension(mol,calc%bas,info)
-      if (present(roks)) self%ndim = self%ndim * 4
       self%memory = calc%mixer_mem
       self%ptr = c_new_broyden(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
    end subroutine new_broyden
@@ -135,96 +146,211 @@ contains
 
 
    !> Set the vector to mix
-   subroutine set_broyden(self, iscf, wfn, info, ints)
+   subroutine set_broyden_dp(self, qat, qsh, dpat, qpat, info)
       use tblite_scf_info, only : atom_resolved, shell_resolved
+      use mctc_env, only : dp
       !> Instance of the Broyden mixer
       class(broyden_type), intent(inout) :: self
-      !> Current iteration count
-      integer, intent(inout) :: iscf
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
+      !> Atom charges
+      real(dp), intent(in) :: qat(:,:)
+      !> Shell charges
+      real(dp), intent(in) :: qsh(:,:)
+      !> Dipole moments
+      real(dp), intent(in) :: dpat(:,:,:)
+      !> Quadrupole moments
+      real(dp), intent(in) :: qpat(:,:,:)
       !> Info data
       type(scf_info) :: info
-      !> Integral container
-      type(integral_type), intent(in) :: ints
 
       select case(info%charge)
        case(atom_resolved)
-         call set_mixer_data(self%ptr, wfn%qat, size(wfn%qat))
+         call set_mixer_data_dp(self%ptr, qat, size(qat))
        case(shell_resolved)
-         call set_mixer_data(self%ptr, wfn%qsh, size(wfn%qsh))
+         call set_mixer_data_dp(self%ptr, qsh, size(qsh))
       end select
 
       select case(info%dipole)
        case(atom_resolved)
-         call set_mixer_data(self%ptr, wfn%dpat, size(wfn%dpat))
+         call set_mixer_data_dp(self%ptr, dpat, size(dpat))
       end select
 
       select case(info%quadrupole)
        case(atom_resolved)
-         call set_mixer_data(self%ptr, wfn%qpat, size(wfn%qpat))
+         call set_mixer_data_dp(self%ptr, qpat, size(qpat))
       end select
-   end subroutine set_broyden
+   end subroutine set_broyden_dp
+
+   subroutine set_broyden_sp(self, qat, qsh, dpat, qpat, info)
+      use tblite_scf_info, only : atom_resolved, shell_resolved
+      use mctc_env, only : sp
+      !> Instance of the Broyden mixer
+      class(broyden_type), intent(inout) :: self
+      !> Atom charges
+      real(sp), intent(in) :: qat(:,:)
+      !> Shell charges
+      real(sp), intent(in) :: qsh(:,:)
+      !> Dipole moments
+      real(sp), intent(in) :: dpat(:,:,:)
+      !> Quadrupole moments
+      real(sp), intent(in) :: qpat(:,:,:)
+      !> Info data
+      type(scf_info) :: info
+
+      select case(info%charge)
+       case(atom_resolved)
+         call set_mixer_data_sp(self%ptr, qat, size(qat))
+       case(shell_resolved)
+         call set_mixer_data_sp(self%ptr, qsh, size(qsh))
+      end select
+
+      select case(info%dipole)
+       case(atom_resolved)
+         call set_mixer_data_sp(self%ptr, dpat, size(dpat))
+      end select
+
+      select case(info%quadrupole)
+       case(atom_resolved)
+         call set_mixer_data_sp(self%ptr, qpat, size(qpat))
+      end select
+   end subroutine set_broyden_sp
 
 
 !> Get the differences of the mixed vector
-   subroutine diff_broyden(self, wfn, info)
+   subroutine diff_broyden_dp(self, qat, qsh, dpat, qpat, info)
       use tblite_scf_info, only : atom_resolved, shell_resolved
+      use mctc_env, only : dp
       !> Instance of the Broyden mixer
       class(broyden_type), intent(inout) :: self
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
+      !> Atom charges
+      real(dp), intent(in) :: qat(:,:)
+      !> Shell charges
+      real(dp), intent(in) :: qsh(:,:)
+      !> Dipole moments
+      real(dp), intent(in) :: dpat(:,:,:)
+      !> Quadrupole moments
+      real(dp), intent(in) :: qpat(:,:,:)
       !> Info data
       type(scf_info) :: info
 
       select case(info%charge)
        case(atom_resolved)
-         call diff_mixer_data(self%ptr, wfn%qat, size(wfn%qat))
+         call diff_mixer_data_dp(self%ptr, qat, size(qat))
        case(shell_resolved)
-         call diff_mixer_data(self%ptr, wfn%qsh, size(wfn%qsh))
+         call diff_mixer_data_dp(self%ptr, qsh, size(qsh))
       end select
 
       select case(info%dipole)
        case(atom_resolved)
-         call diff_mixer_data(self%ptr, wfn%dpat, size(wfn%dpat))
+         call diff_mixer_data_dp(self%ptr, dpat, size(dpat))
       end select
 
       select case(info%quadrupole)
        case(atom_resolved)
-         call diff_mixer_data(self%ptr, wfn%qpat, size(wfn%qpat))
+         call diff_mixer_data_dp(self%ptr, qpat, size(qpat))
       end select
-   end subroutine diff_broyden
+   end subroutine diff_broyden_dp
+
+   subroutine diff_broyden_sp(self, qat, qsh, dpat, qpat, info)
+      use tblite_scf_info, only : atom_resolved, shell_resolved
+      use mctc_env, only : sp
+      !> Instance of the Broyden mixer
+      class(broyden_type), intent(inout) :: self
+      !> Atom charges
+      real(sp), intent(in) :: qat(:,:)
+      !> Shell charges
+      real(sp), intent(in) :: qsh(:,:)
+      !> Dipole moments
+      real(sp), intent(in) :: dpat(:,:,:)
+      !> Quadrupole moments
+      real(sp), intent(in) :: qpat(:,:,:)
+      !> Info data
+      type(scf_info) :: info
+
+      select case(info%charge)
+       case(atom_resolved)
+         call diff_mixer_data_sp(self%ptr, qat, size(qat))
+       case(shell_resolved)
+         call diff_mixer_data_sp(self%ptr, qsh, size(qsh))
+      end select
+
+      select case(info%dipole)
+       case(atom_resolved)
+         call diff_mixer_data_sp(self%ptr, dpat, size(dpat))
+      end select
+
+      select case(info%quadrupole)
+       case(atom_resolved)
+         call diff_mixer_data_sp(self%ptr, qpat, size(qpat))
+      end select
+   end subroutine diff_broyden_sp
 
 !> Get the mixed vector
-   subroutine get_broyden(self, bas, wfn, info)
+   subroutine get_broyden_dp(self, qat, qsh, dpat, qpat, info)
       use tblite_scf_info, only : atom_resolved, shell_resolved
+      use mctc_env, only : dp
       !> Instance of the Broyden mixer
       class(broyden_type), intent(inout) :: self
-      !> Basis functions data
-      type(basis_type), intent(in) :: bas
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
+      !> Atom charges
+      real(dp), intent(out) :: qat(:,:)
+      !> Shell charges
+      real(dp), intent(out) :: qsh(:,:)
+      !> Dipole moments
+      real(dp), intent(out) :: dpat(:,:,:)
+      !> Quadrupole moments
+      real(dp), intent(out) :: qpat(:,:,:)
       !> Info data
       type(scf_info) :: info
 
-
       select case(info%charge)
-       case(atom_resolved)
-         call get_mixer_data(self%ptr, wfn%qat, size(wfn%qat))
-       case(shell_resolved)
-         call get_mixer_data(self%ptr, wfn%qsh, size(wfn%qsh))
-         call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
+         case(atom_resolved)
+            call get_mixer_data_dp(self%ptr, qat, size(qat))
+         case(shell_resolved)
+            call get_mixer_data_dp(self%ptr, qsh, size(qsh))
       end select
 
       select case(info%dipole)
-       case(atom_resolved)
-         call get_mixer_data(self%ptr, wfn%dpat, size(wfn%dpat))
+         case(atom_resolved)
+            call get_mixer_data_dp(self%ptr, dpat, size(dpat))
       end select
 
       select case(info%quadrupole)
-       case(atom_resolved)
-         call get_mixer_data(self%ptr, wfn%qpat, size(wfn%qpat))
+         case(atom_resolved)
+            call get_mixer_data_dp(self%ptr, qpat, size(qpat))
       end select
-   end subroutine get_broyden
+   end subroutine get_broyden_dp
+
+   subroutine get_broyden_sp(self, qat, qsh, dpat, qpat, info)
+      use tblite_scf_info, only : atom_resolved, shell_resolved
+      use mctc_env, only : sp
+      !> Instance of the Broyden mixer
+      class(broyden_type), intent(inout) :: self
+      !> Atom charges
+      real(sp), intent(out) :: qat(:,:)
+      !> Shell charges
+      real(sp), intent(out) :: qsh(:,:)
+      !> Dipole moments
+      real(sp), intent(out) :: dpat(:,:,:)
+      !> Quadrupole moments
+      real(sp), intent(out) :: qpat(:,:,:)
+      !> Info data
+      type(scf_info) :: info
+
+      select case(info%charge)
+         case(atom_resolved)
+            call get_mixer_data_sp(self%ptr, qat, size(qat))
+         case(shell_resolved)
+            call get_mixer_data_sp(self%ptr, qsh, size(qsh))
+      end select
+
+      select case(info%dipole)
+         case(atom_resolved)
+            call get_mixer_data_sp(self%ptr, dpat, size(dpat))
+      end select
+
+      select case(info%quadrupole)
+         case(atom_resolved)
+            call get_mixer_data_sp(self%ptr, qpat, size(qpat))
+      end select
+   end subroutine get_broyden_sp
 
 end module tblite_scf_mixer_broyden

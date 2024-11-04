@@ -21,24 +21,21 @@
 !> Implementation of the single point calculation for a self-consistent
 !> extended tight-binding Hamiltonian.
 module tblite_xtb_singlepoint
-   use mctc_env, only : wp, error_type, fatal_error, get_variable
+   use mctc_env, only : wp, error_type, fatal_error
    use mctc_io, only : structure_type
    use tblite_adjlist, only : adjacency_list, new_adjacency_list
-   use tblite_basis_type, only : get_cutoff, basis_type
+   use tblite_basis_type, only : get_cutoff
    use tblite_blas, only : gemv
-   use tblite_container, only : container_cache, container_list, container_type
+   use tblite_container, only : container_cache
    use tblite_context, only : context_type, escape
    use tblite_cutoff, only : get_lattice_points
    use tblite_integral_type, only : integral_type, new_integral
-   use tblite_lapack_sygvr, only : sygvr_solver
    use tblite_output_format, only : format_string
    use tblite_results, only : results_type
    use tblite_scf, only : scf_info, next_scf, potential_type, new_potential
    use tblite_scf_solver, only : solver_type
    use tblite_scf_mixer, only: mixer_type
    use tblite_scf_mixers, only: mixers_type, destroy, setup
-   use tblite_scf_mixer_broyden, only: broyden_type, new_broyden
-   use tblite_scf_mixer_diis, only: diis_type, new_diis
    use tblite_timer, only : timer_type, format_time
    use tblite_wavefunction, only : wavefunction_type, get_density_matrix, &
       & get_alpha_beta_occupation, magnet_to_updown, updown_to_magnet
@@ -76,7 +73,7 @@ module tblite_xtb_singlepoint
          real(c_float), value :: dummy
       end function get_error_sp
    
-      double precision function get_error_dp(mixer,iter,dummy) bind(C,name="GetError")
+      double precision function get_error_dp(mixer,iter,dummy) bind(C,name="GetErrorDP")
          use iso_c_binding
          use mctc_env, only : dp
          type(c_ptr), value :: mixer

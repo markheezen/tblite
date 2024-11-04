@@ -18,14 +18,7 @@
 !> Implementing DIIS (direct inversion in the iterative subspace) mixing
 
 module tblite_scf_mixer_diis
-   use mctc_env, only : wp
    use tblite_scf_mixer
-   use tblite_basis_type, only : basis_type
-   use tblite_xtb_calculator, only : xtb_calculator
-   use tblite_wavefunction, only : wavefunction_type
-   use mctc_io, only : structure_type
-   use tblite_scf_info, only : scf_info
-   use tblite_integral_type, only : integral_type
    use iso_c_binding
    implicit none
 
@@ -34,13 +27,13 @@ module tblite_scf_mixer_diis
 
    contains
       !> Set new object to mix
-      procedure :: set => set_diis
+      procedure :: set => set_diis_dp, set_diis_sp
       !> Set difference between two consecutive objects to mix
-      procedure :: diff => diff_diis
+      procedure :: diff => diff_diis_dp, diff_diis_sp
       !> Get mixed object
-      procedure :: get => get_diis
+      procedure :: get => get_diis_dp, get_diis_sp
       !> Construct the error vector
-      procedure :: construct_error
+      procedure :: construct_error => construct_error_dp, construct_error_sp
    end type diis_type
 
    interface
@@ -52,43 +45,71 @@ module tblite_scf_mixer_diis
          integer(c_int), value :: nao
       end function c_new_diis
 
-      subroutine construct_error_vec(mixer,fock,density,overlap) bind(C,name="ConstructError")
+      subroutine construct_error_vec_dp(mixer,fock,density,overlap) bind(C,name="ConstructErrorDP")
          use iso_c_binding
-         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-         real(wp), intent(in) :: fock(*)
-         real(wp), intent(in) :: density(*)
-         real(wp), intent(in) :: overlap(*)
-      end subroutine construct_error_vec
+         real(c_double), intent(in) :: fock(*)
+         real(c_double), intent(in) :: density(*)
+         real(c_double), intent(in) :: overlap(*)
+      end subroutine construct_error_vec_dp
 
-      subroutine set_q(mixer,iscf,fock) bind(C,name="SetQ")
+      subroutine construct_error_vec_sp(mixer,fock,density,overlap) bind(C,name="ConstructErrorSP")
          use iso_c_binding
-         use mctc_env, only : wp
          type(c_ptr), value, intent(in) :: mixer
-         integer, intent(in), value :: iscf
-         real(wp), intent(in) :: fock(*)
-      end subroutine set_q
+         real(c_float), intent(in) :: fock(*)
+         real(c_float), intent(in) :: density(*)
+         real(c_float), intent(in) :: overlap(*)
+      end subroutine construct_error_vec_sp
 
-      subroutine get_mixer_data(mixer,target,size) bind(C,name="GetData")
-        use iso_c_binding
-        use mctc_env, only : wp
-        type(c_ptr), value, intent(in) :: mixer
-        real(wp), intent(inout) :: target(*)
-        integer(c_int), value, intent(in) :: size
-     end subroutine get_mixer_data
+      subroutine set_mixer_data_dp(mixer,iscf,fock) bind(C,name="SetQDP")
+         use iso_c_binding
+         type(c_ptr), value, intent(in) :: mixer
+         integer(c_int), intent(in), value :: iscf
+         real(c_double), intent(in) :: fock(*)
+      end subroutine set_mixer_data_dp
 
-     subroutine diff_mixer_data(mixer,target,size) bind(C,name="DiffData")
+      subroutine set_mixer_data_sp(mixer,iscf,fock) bind(C,name="SetQSP")
+         use iso_c_binding
+         type(c_ptr), value, intent(in) :: mixer
+         integer(c_int), intent(in), value :: iscf
+         real(c_float), intent(in) :: fock(*)
+      end subroutine set_mixer_data_sp
+
+      subroutine get_mixer_data_dp(mixer,target,size) bind(C,name="GetDataDP")
         use iso_c_binding
-        use mctc_env, only : wp
         type(c_ptr), value, intent(in) :: mixer
-        real(wp), intent(in) :: target(*)
+        real(c_double), intent(inout) :: target(*)
         integer(c_int), value, intent(in) :: size
-     end subroutine diff_mixer_data
+     end subroutine get_mixer_data_dp
+
+     subroutine get_mixer_data_sp(mixer,target,size) bind(C,name="GetDataSP")
+         use iso_c_binding
+         type(c_ptr), value, intent(in) :: mixer
+         real(c_float), intent(inout) :: target(*)
+         integer(c_int), value, intent(in) :: size
+      end subroutine get_mixer_data_sp
+
+     subroutine diff_mixer_data_dp(mixer,target,size) bind(C,name="DiffDataDP")
+        use iso_c_binding
+        type(c_ptr), value, intent(in) :: mixer
+        real(c_double), intent(in) :: target(*)
+        integer(c_int), value, intent(in) :: size
+     end subroutine diff_mixer_data_dp
+
+     subroutine diff_mixer_data_sp(mixer,target,size) bind(C,name="DiffDataSP")
+         use iso_c_binding
+         type(c_ptr), value, intent(in) :: mixer
+         real(c_float), intent(in) :: target(*)
+         integer(c_int), value, intent(in) :: size
+      end subroutine diff_mixer_data_sp
    end interface
 
 contains
    !> Create a new instance of the DIIS mixer
    subroutine new_diis(self, mol, calc, info)
+      use tblite_xtb_calculator, only : xtb_calculator
+      use mctc_io, only : structure_type
+      use tblite_scf_info, only : scf_info
       !> DIIS object
       class(diis_type), intent(out) :: self
       !> Molecular structure data
@@ -104,59 +125,99 @@ contains
    end subroutine new_diis
 
    !> Set the error vector used for mixing
-   subroutine construct_error(self, wfn, info, ints)
+   subroutine construct_error_dp(self, hmat, pmat, smat)
+      use mctc_env, only : dp
       !> Instance of the DIIS mixer
       class(diis_type), intent(inout) :: self
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
-      !> Info data
-      type(scf_info) :: info
-      !> Integral container
-      type(integral_type), intent(in) :: ints
+      !> Fock matrix
+      real(dp), intent(in) :: hmat(:,:)
+      !> Density matrix
+      real(dp), intent(in) :: pmat(:,:)
+      !> Overlap matrix
+      real(dp), intent(in) :: smat(:,:)
 
-      call construct_error_vec(self%ptr,wfn%coeff(:,:,1),wfn%density(:,:,1),ints%overlap)
-   end subroutine construct_error
+      call construct_error_vec_dp(self%ptr, hmat, pmat, smat)
+   end subroutine construct_error_dp
+
+   subroutine construct_error_sp(self, hmat, pmat, smat)
+      use mctc_env, only : sp
+      !> Instance of the DIIS mixer
+      class(diis_type), intent(inout) :: self
+      !> Fock matrix
+      real(sp), intent(in) :: hmat(:,:)
+      !> Density matrix
+      real(sp), intent(in) :: pmat(:,:)
+      !> Overlap matrix
+      real(sp), intent(in) :: smat(:,:)
+
+      call construct_error_vec_sp(self%ptr, hmat, pmat, smat)
+   end subroutine construct_error_sp
 
    !> Set the vector to mix
-   subroutine set_diis(self, iscf, wfn, info, ints)
+   subroutine set_diis_dp(self, iscf, hmat)
+      use mctc_env, only : dp
       !> Instance of the DIIS mixer
       class(diis_type), intent(inout) :: self
       !> Current iteration count
-      integer, intent(inout) :: iscf
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
-      !> Info data
-      type(scf_info) :: info
-      !> Integral container
-      type(integral_type), intent(in) :: ints
+      integer, intent(in) :: iscf
+      !> Fock matrix
+      real(dp), intent(in) :: hmat(:,:)
+      
+      call set_mixer_data_dp(self%ptr, iscf, hmat)
+   end subroutine set_diis_dp
+
+   subroutine set_diis_sp(self, iscf, hmat)
+      use mctc_env, only : sp
+      !> Instance of the DIIS mixer
+      class(diis_type), intent(inout) :: self
+      !> Current iteration count
+      integer, intent(in) :: iscf
+      !> Fock matrix
+      real(sp), intent(in) :: hmat(:,:)
   
-      call set_q(self%ptr,iscf,wfn%coeff(:,:,1))
-   end subroutine set_diis
+      call set_mixer_data_sp(self%ptr, iscf, hmat)
+   end subroutine set_diis_sp
 
    !> Get the differences of the mixed vector
-   subroutine diff_diis(self, wfn, info)
+   subroutine diff_diis_dp(self, hmat)
+      use mctc_env, only : dp
       !> Instance of the DIIS mixer
       class(diis_type), intent(inout) :: self
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
-      !> Info data
-      type(scf_info) :: info
+      !> Fock matrix
+      real(dp), intent(in) :: hmat(:,:)
 
-      call diff_mixer_data(self%ptr, wfn%coeff(:,:,1), size(wfn%coeff(:,:,1)))
-   end subroutine diff_diis
+      call diff_mixer_data_dp(self%ptr, hmat, size(hmat))
+   end subroutine diff_diis_dp
 
-!> Get the mixed vector
-   subroutine get_diis(self, bas, wfn, info)
+   subroutine diff_diis_sp(self, hmat)
+      use mctc_env, only : sp
       !> Instance of the DIIS mixer
       class(diis_type), intent(inout) :: self
-      !> Basis functions data
-      type(basis_type), intent(in) :: bas
-      !> Wavefunction data
-      type(wavefunction_type), intent(inout) :: wfn
-      !> Info data
-      type(scf_info) :: info
+      !> Fock matrix
+      real(sp), intent(in) :: hmat(:,:)
 
-      call get_mixer_data(self%ptr,wfn%coeff(:,:,1),size(wfn%coeff(:,:,1)))
-   end subroutine get_diis
+      call diff_mixer_data_sp(self%ptr, hmat, size(hmat))
+   end subroutine diff_diis_sp
+
+   !> Get the mixed vector
+   subroutine get_diis_dp(self, hmat)
+      use mctc_env, only : dp
+      !> Instance of the DIIS mixer
+      class(diis_type), intent(inout) :: self
+      !> Fock matrix
+      real(dp), intent(out) :: hmat(:,:)
+
+      call get_mixer_data_dp(self%ptr, hmat, size(hmat))
+   end subroutine get_diis_dp
+
+   subroutine get_diis_sp(self, hmat)
+      use mctc_env, only : sp
+      !> Instance of the DIIS mixer
+      class(diis_type), intent(inout) :: self
+      !> Fock matrix
+      real(sp), intent(out) :: hmat(:,:)
+
+      call get_mixer_data_sp(self%ptr, hmat, size(hmat))
+   end subroutine get_diis_sp
 
 end module tblite_scf_mixer_diis
