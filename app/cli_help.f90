@@ -118,7 +118,12 @@ module tblite_cli_help
       "      --etemp-guess <real> Electronic temperature for ceh-guess (Default: 5000K)"//nl//&
       "      --iterations <int>   Maximum number of SCF iterations (Default: 250)"//nl//&
       "      --solver <name>      Electronic solver for SCF, possible options:"//nl//&
-      "                           gvd (default), and gvr"//nl//&
+      "                           gvd (default), gvr, and purification solvers:"//nl//&
+      "                           tc2, tc2-accel, trs4, and mcweeney"//nl//&
+      "      --p-runmode <name>   Choose between CPU and GPU runmode when using:"//nl//&
+      "                           purification solver. Default depends on system"//nl//&  
+      "      --p-precision <name> Choose between single, double, approx, and mixed"//nl//&
+      "                           (default) precision for purification solver."//nl//&     
       "      --efield <real>,<real>,<real>"//nl//&
       "                           Homogeneous electric field in V/Å."//nl//&
       "--alpb <real>              Use analytical linearized Poisson-Boltzmann solvation."//nl//&
