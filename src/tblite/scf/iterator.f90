@@ -36,7 +36,6 @@ module tblite_scf_iterator
    use tblite_scf_utils, only : get_electronic_energy, reduce, get_qat_from_qsh, &
       & get_density
    use tblite_exchange_type, only : exchange_type
-   use iso_c_binding
    implicit none
    private
 
@@ -48,7 +47,6 @@ contains
 subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
       & interactions, exchange, ints, pot, cache, dcache, icache, ecache, &
       & energies, error)
-   use iso_c_binding
    !> Current iteration count
    integer, intent(inout) :: iscf
    !> Molecular structure data
@@ -94,7 +92,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   !we do this to check wether a density-based guess was used
+   !we do this to check whether a density-based guess was used
    if (wfn%density(1, 1, 1) .ne. 0.0_wp) then
       call get_mulliken_shell_charges(bas, ints%overlap, wfn%density, wfn%n0sh, &
       & wfn%qsh)
@@ -132,7 +130,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
       call mixer%broyden%set(wfn%qat, wfn%qsh, wfn%dpat, wfn%qpat, info)
    end if
 
-   if (allocated(mixer%diis)) call mixer%diis%set(iscf, wfn%coeff(:,:,1))
+   if (allocated(mixer%diis)) call mixer%diis%set(wfn%coeff(:,:,1))
 
    if (allocated(mixer%diis) .and. iscf > 1) then
       call mixer%diis%construct_error(wfn%coeff(:,:,1), wfn%density(:,:,1), ints%overlap)
