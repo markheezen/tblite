@@ -20,4 +20,5 @@ srcs += files(
   'erf.f90',
   'erf_en.f90',
   'type.f90',
+  'xtbml.f90',
 )

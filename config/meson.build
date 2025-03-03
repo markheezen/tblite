@@ -146,3 +146,29 @@ tomlf_dep = dependency(
   default_options: ['default_library=static'],
 )
 lib_deps += tomlf_dep
+
+gambits_dep = dependency(
+  'gambits',
+  version: '>=0.0.0',
+  fallback: ['gambits','gambits_dep'],
+  default_options: ['default_library=static','gpu=true'],
+)
+lib_deps += gambits_dep
+
+gpu = get_option('gpu')
+if gpu == true
+mullk_dep = dependency(
+  'mullk',
+  version: '>=0.0.1',
+  fallback: ['mullk', 'mullk_dep'],
+  default_options: ['default_library=static','gpu=true'],
+)
+else
+mullk_dep = dependency(
+  'mullk',
+  version: '>=0.0.1',
+  fallback: ['mullk', 'mullk_dep'],
+  default_options: ['default_library=static','gpu=false'],
+)
+endif
+lib_deps += mullk_dep

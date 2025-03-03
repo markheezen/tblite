@@ -25,6 +25,8 @@ list(
   "${dir}/mixer.f90"
   "${dir}/potential.f90"
   "${dir}/solver.f90"
+  "${dir}/type.f90"
+  "${dir}/utils.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

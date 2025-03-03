@@ -22,37 +22,38 @@
 
 !> Provides an electronic mixer implementation
 module tblite_scf_mixer
-   use mctc_env, only : wp
-   use tblite_scf_mixer_broyden, only : broyden_mixer, broyden_input, new_broyden
-   use tblite_scf_mixer_type, only : mixer_type
+   use iso_c_binding
    implicit none
-   private
-
-   public :: mixer_type, new_mixer
 
 
-   !> Input for selecting electronic mixer
-   type, public :: mixer_input
-      !> Input for Broyden mixer
-      type(broyden_input), allocatable :: broyden
-   end type mixer_input
 
-contains
+   !> Electronic mixer
+   type, public, abstract :: mixer_type
+      integer :: ndim
+      integer :: memory
+      type(c_ptr) :: ptr
+   contains
+      !> Apply mixing to the density
+      procedure :: next
+   end type mixer_type
 
-!> Create a new instance of the mixer
-subroutine new_mixer(self, memory, ndim, damp)
-   !> Instance of the mixer on exit
-   class(mixer_type), allocatable, intent(out) :: self
-   integer, intent(in) :: memory
-   integer, intent(in) :: ndim
-   real(wp), intent(in) :: damp
+   interface
+   subroutine next_mixer(mixer,iter) bind(C,name="Next")
+      use iso_c_binding
+      type(c_ptr), value, intent(in) :: mixer
+      integer(c_int), value, intent(in) :: iter
+   end subroutine next_mixer
+   end interface
+ 
+   contains
 
-   block
-      type(broyden_mixer), allocatable :: mixer
-      allocate(mixer)
-      call new_broyden(mixer, ndim, broyden_input(memory, damp))
-      call move_alloc(mixer, self)
-   end block
-end subroutine new_mixer
+   subroutine next(self, iter)
+      !> Mixer object
+      class(mixer_type), intent(inout) :: self
+      !> SCF Iteration
+      integer, intent(in) :: iter
+
+      call next_mixer(self%ptr, iter)
+   end subroutine next
 
 end module tblite_scf_mixer

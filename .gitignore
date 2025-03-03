@@ -35,5 +35,8 @@
 /build*/
 /_*/
 
+# IDE directories
+.vscode
+
 # Python files
 __pycache__

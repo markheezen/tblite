@@ -23,6 +23,7 @@ list(
   "${dir}/erf.f90"
   "${dir}/erf_en.f90"
   "${dir}/type.f90"
+  "${dir}/xtbml.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

@@ -24,9 +24,12 @@ module tblite_cli
       & help_text_fit, help_text_tagdiff, help_text_guess
    use tblite_features, only : get_tblite_feature
    use tblite_lapack_solver, only : lapack_algorithm
+   use tblite_purification_solver_context, only : purification_type, &
+      & purification_precision, purification_runmode
    use tblite_solvation, only : solvation_input, cpcm_input, alpb_input, &
       & cds_input, shift_input, solvent_data, get_solvent_data, solution_state, born_kernel
    use tblite_version, only : get_tblite_version
+   use iso_c_binding
    implicit none
    private
 
@@ -82,6 +85,20 @@ module tblite_cli
       logical :: spin_polarized = .false.
       !> Algorithm for electronic solver
       integer :: solver = lapack_algorithm%gvd
+      !> Purifcation solver
+      integer(c_size_t), allocatable :: purification_solver
+      !> Purification precision
+      integer(c_size_t) :: purification_precision_ = purification_precision%mixed
+      !> Purification runmode
+      integer(c_size_t) :: purification_runmode_ = purification_runmode%default
+      !> Type of mixer
+      integer, allocatable :: mixer
+      !> Memory of the mixer
+      integer, allocatable :: mixer_memory
+      !> Use of the ROKS method
+      logical, allocatable :: roks
+      !> ROKS start
+      integer, allocatable :: roks_start
    end type run_config
 
    !> Configuration for evaluating tight binding model on input structure
@@ -472,6 +489,39 @@ subroutine get_run_arguments(config, list, start, error)
          call get_argument_as_int(arg, config%max_iter, error)
          if (allocated(error)) exit
 
+      case("--mixer")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         allocate(config%mixer)
+         call get_argument_as_int(arg, config%mixer, error)
+         if (allocated(error)) exit
+         if (config%mixer < 0 .or. config%mixer > 1) then
+            call fatal_error(error,"Mixer must be either 0 (Broyden) or 1 (DIIS)")
+         end if
+      
+      case("--mixmem")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         allocate(config%mixer_memory)
+         call get_argument_as_int(arg, config%mixer_memory, error)
+         if (allocated(error)) exit
+         if (config%mixer_memory <= 0) then
+            call fatal_error(error,"Mixmem must be larger than 0")
+         end if
+
+      case ("--roks")
+         allocate(config%roks)
+      
+      case ("--roks-start")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         allocate(config%roks_start)
+         call get_argument_as_int(arg, config%roks_start, error)
+         if (allocated(error)) exit
+         if (config%roks_start < 0 .or. config%roks_start > 1) then
+            call fatal_error(error,"ROKS start must be either 0 (first iteration) or 1 (fully converged SCF)")
+         end if
+
       case("--solver")
          iarg = iarg + 1
          call list%get(iarg, arg)
@@ -488,6 +538,54 @@ subroutine get_run_arguments(config, list, start, error)
             config%solver = lapack_algorithm%gvd
          case("gvr")
             config%solver = lapack_algorithm%gvr
+         case("tc2")
+            allocate(config%purification_solver)
+            config%purification_solver = purification_type%tc2
+         case("tc2-accel")
+            allocate(config%purification_solver)
+            config%purification_solver = purification_type%tc2accel    
+         case("trs4")
+            allocate(config%purification_solver)
+            config%purification_solver = purification_type%trs4
+         case("mcweeney")
+            allocate(config%purification_solver)
+            config%purification_solver = purification_type%mcweeney
+         end select
+
+      case("--p-runmode")
+         iarg = iarg +1
+         call list%get(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for purification runmode")
+            exit
+         end if
+
+         select case(arg)
+         case("gpu")
+            config%purification_runmode_ = purification_runmode%gpu
+         case("cpu")
+            config%purification_runmode_ = purification_runmode%cpu
+         case default
+            config%purification_runmode_ = purification_runmode%default
+         end select
+
+      case("--p-precision")
+         iarg = iarg +1
+         call list%get(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for purification precision")
+            exit
+         end if
+
+         select case(arg)
+         case("double")
+            config%purification_precision_ = purification_precision%double
+         case("single")
+            config%purification_precision_ = purification_precision%single
+         case ("approx")
+            config%purification_precision_ = purification_precision%approx
+         case default
+            config%purification_precision_ = purification_precision%mixed
          end select
 
       case("--etemp")

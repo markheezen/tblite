@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with tblite.  If not, see <https://www.gnu.org/licenses/>.
 
-subdir('mixer')
+subdir('mixers')
 
 srcs += files(
   'info.f90',
@@ -22,4 +22,6 @@ srcs += files(
   'mixer.f90',
   'potential.f90',
   'solver.f90',
+  'type.f90',
+  'utils.f90'
 )

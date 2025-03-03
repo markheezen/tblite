@@ -31,6 +31,7 @@ module tblite_driver_run
    use tblite_output_ascii
    use tblite_param, only : param_record
    use tblite_results, only : results_type
+   use tblite_roks, only: roks_singlepoint
    use tblite_spin, only : spin_polarization, new_spin_polarization
    use tblite_solvation, only : new_solvation, new_solvation_cds, new_solvation_shift, solvation_type
    use tblite_wavefunction, only : wavefunction_type, new_wavefunction, &
@@ -58,6 +59,11 @@ module tblite_driver_run
    !> Convert V/Å = J/(C·Å) to atomic units
    real(wp), parameter :: vatoau = jtoau / (ctoau * aatoau)
    character(len=:), allocatable :: wbo_label, molmom_label
+   
+   ! Check for the best location of these parameters
+   integer, parameter :: mixer_type_default = 1
+   integer, parameter :: mixer_memory_default = 5
+   integer, parameter :: roks_start_default = 0
 
 contains
 
@@ -132,6 +138,9 @@ subroutine run_main(config, error)
 
    if (allocated(config%param)) then
       call param%load(config%param, error)
+      if (allocated(param%exchange).and.mol%uhf.ne.0) then
+         nspin = 2
+      end if
       if (.not. allocated(error)) then
          call new_xtb_calculator(calc, mol, param, error)
       end if
@@ -152,6 +161,20 @@ subroutine run_main(config, error)
    if (allocated(error)) return
 
    if (allocated(config%max_iter)) calc%max_iter = config%max_iter
+   
+   if (allocated(config%mixer)) then
+      allocate(calc%mixer_type)
+      calc%mixer_type = config%mixer
+   else
+      allocate(calc%mixer_type)
+      calc%mixer_type = mixer_type_default
+   end if
+
+   if (allocated(config%mixer_memory)) then
+      calc%mixer_mem = config%mixer_memory
+   else
+      calc%mixer_mem = mixer_memory_default
+   end if
 
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, nspin, config%etemp * kt)
 
@@ -274,8 +297,19 @@ subroutine run_main(config, error)
       call ctx%message("")
    end if
 
-   call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-      & config%verbosity, results, post_proc)
+   if (allocated(config%roks)) then
+      if (allocated(config%roks_start)) then
+         call roks_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
+         & config%verbosity, results, post_proc, config%roks_start)
+      else
+         call roks_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
+         & config%verbosity, results, post_proc, roks_start_default)
+      end if
+   else
+      call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
+         & config%verbosity, results, post_proc, .false.)
+   end if
+
    if (ctx%failed()) then
       call fatal(ctx, "Singlepoint calculation failed")
       do while(ctx%failed())
@@ -284,6 +318,10 @@ subroutine run_main(config, error)
       end do
       error stop
    end if
+
+   if (allocated(config%roks)) then
+      continue
+   else
 
    if (config%verbosity > 2) then
       call ascii_levels(ctx%unit, config%verbosity, wfn%homo, wfn%emo, wfn%focc, 7)
@@ -312,6 +350,7 @@ subroutine run_main(config, error)
       close(unit)
       if (config%verbosity > 0) then
          call info(ctx, "JSON dump of results written to '"//config%json_output//"'")
+      end if
       end if
    end if
 end subroutine run_main

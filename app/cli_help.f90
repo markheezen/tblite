@@ -119,7 +119,12 @@ module tblite_cli_help
       "      --etemp-guess <real> Electronic temperature for ceh-guess (Default: 5000K)"//nl//&
       "      --iterations <int>   Maximum number of SCF iterations (Default: 250)"//nl//&
       "      --solver <name>      Electronic solver for SCF, possible options:"//nl//&
-      "                           gvd (default), and gvr"//nl//&
+      "                           gvd (default), gvr, and purification solvers:"//nl//&
+      "                           tc2, tc2-accel, trs4, and mcweeney"//nl//&
+      "      --p-runmode <name>   Choose between CPU and GPU runmode when using:"//nl//&
+      "                           purification solver. Default depends on system"//nl//&  
+      "      --p-precision <name> Choose between single, double, approx, and mixed"//nl//&
+      "                           (default) precision for purification solver."//nl//&   
       "      --efield <real>,<real>,<real>"//nl//&
       "                           Homogeneous electric field in V/Å."//nl//&
       "      --alpb <name>        Use analytical linearized Poisson-Boltzmann (ALPB) solvation model."//nl//&
@@ -138,6 +143,12 @@ module tblite_cli_help
       "                           Possible options are p16 (default for ALPB) and still (default for GB/GBSA)."//nl//&
       "      --solv-state <name>  Solution state correction: gsolv (default), bar1mol, reference."//nl//& 
       "      --spin-polarized     Use spin-polarized xTB Hamiltonian"//nl//&
+      "--mixer <int>              Set the type of convergence accelerator (mixer),"//nl//&
+      "                           It can be Broyden (0) or DIIS (1)."//nl//&
+      "      --mixmem <int>       Set the number of past iterations to be used by the mixer."//nl//&
+      "--roks                     Perform Restricted Open Shell Kohn Sham calculation"//nl//&
+      "      --roks-start <int>   Set the type of initial guess to use for ROKS:"//nl//&
+      "                           first SCF iteration (0) or fully converged SCF (1)."//nl//&
       "      --post-processing <file>"//nl//&
       "                           Add post processing methods to the calculation"//nl//&
       "                           by using a toml file as input."//nl//&

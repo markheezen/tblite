@@ -26,6 +26,7 @@ subdir('coulomb')
 subdir('ceh')
 subdir('data')
 subdir('disp')
+subdir('exchange')
 subdir('external')
 subdir('fit')
 subdir('integral')
@@ -36,7 +37,9 @@ subdir('ncoord')
 subdir('output')
 subdir('param')
 subdir('post_processing')
+subdir('purification')
 subdir('repulsion')
+subdir('roks')
 subdir('scf')
 subdir('solvation')
 subdir('wavefunction')
@@ -53,12 +56,14 @@ srcs += files(
   'data.f90',
   'double_dictionary.f90',
   'disp.f90',
+  'exchange.f90',
   'lapack.f90',
   'ncoord.f90',
   'os.F90',
   'param.f90',
   'repulsion.f90',
   'results.f90',
+  'roks.f90',
   'scf.f90',
   'solvation.f90',
   'spin.f90',
