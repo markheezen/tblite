@@ -62,7 +62,8 @@ module tblite_driver_run
    
    ! Check for the best location of these parameters
    integer, parameter :: mixer_type_default = 1
-   integer, parameter :: mixer_memory_default = 5
+   integer, parameter :: mixer_memory_broyden_default = 250
+   integer, parameter :: mixer_memory_diis_default = 5
    integer, parameter :: roks_start_default = 0
 
 contains
@@ -172,8 +173,10 @@ subroutine run_main(config, error)
 
    if (allocated(config%mixer_memory)) then
       calc%mixer_mem = config%mixer_memory
-   else
-      calc%mixer_mem = mixer_memory_default
+   else if (calc%mixer_type == 0) then
+      calc%mixer_mem = mixer_memory_broyden_default
+   else if (calc%mixer_type == 1) then
+      calc%mixer_mem = mixer_memory_diis_default
    end if
 
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, nspin, config%etemp * kt)
