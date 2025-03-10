@@ -224,14 +224,6 @@ subroutine run_main(config, error)
    end select
    if (allocated(error)) return
 
-   if (allocated(config%efield)) then
-      block
-         class(container_type), allocatable :: cont
-         cont = electric_field(config%efield*vatoau)
-         call calc%push_back(cont)
-      end block
-   end if
-
    if (config%spin_polarized) then
       block
          class(container_type), allocatable :: cont
@@ -300,18 +292,8 @@ subroutine run_main(config, error)
       call ctx%message("")
    end if
 
-   if (allocated(config%roks)) then
-      if (allocated(config%roks_start)) then
-         call roks_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-         & config%verbosity, results, post_proc, config%roks_start)
-      else
-         call roks_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-         & config%verbosity, results, post_proc, roks_start_default)
-      end if
-   else
-      call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
-         & config%verbosity, results, post_proc, .false.)
-   end if
+   call xtb_singlepoint(ctx, mol, calc, wfn, config%accuracy, energy, gradient, sigma, &
+      & config%verbosity, results, post_proc, .false.)
 
    if (ctx%failed()) then
       call fatal(ctx, "Singlepoint calculation failed")
