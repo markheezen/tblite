@@ -132,7 +132,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixers, info, coulomb, dispersi
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-   if (allocated(mixers(1)%broyden) .and. iscf > 1) then
+   if (allocated(mixers(1)%broyden)) then
       do spin=1,wfn%nspin
          call mixers(1)%broyden%set(wfn%qat(:,spin), wfn%qsh(:,spin), wfn%dpat(:,:,spin), wfn%qpat(:,:,spin), info)
       end do
