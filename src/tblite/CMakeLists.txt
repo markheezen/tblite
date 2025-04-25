@@ -36,6 +36,7 @@ add_subdirectory("ncoord")
 add_subdirectory("output")
 add_subdirectory("param")
 add_subdirectory("post_processing")
+add_subdirectory("roks")
 add_subdirectory("repulsion")
 add_subdirectory("scf")
 add_subdirectory("solvation")
@@ -62,6 +63,7 @@ list(
   "${dir}/param.f90"
   "${dir}/repulsion.f90"
   "${dir}/results.f90"
+  "${dir}/roks.f90"
   "${dir}/scf.f90"
   "${dir}/solvation.f90"
   "${dir}/spin.f90"
