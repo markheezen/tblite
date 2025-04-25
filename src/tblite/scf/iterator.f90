@@ -144,9 +144,14 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixers, info, coulomb, dispersi
       end do
    end if
 
-   if (allocated(mixers(1)%diis) .and. iscf > 1) then
+   if (allocated(mixers(1)%diis) .and. iscf >= mixers(1)%diis%start) then
       do spin = 1, wfn%nspin
          call mixers(spin)%diis%construct_error(wfn%coeff(:,:,spin), wfn%density(:,:,spin), ints%overlap)
+      end do
+   end if
+
+   if (allocated(mixers(1)%diis) .and. iscf > 1) then
+      do spin = 1, wfn%nspin
          call mixers(spin)%diis%next(iscf)
          call mixers(spin)%diis%get(wfn%coeff(:,:,spin))
       end do
@@ -170,7 +175,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixers, info, coulomb, dispersi
          end do
       end if
    
-      if (allocated(mixers(1)%diis) .and. iscf == 1) then
+      if (allocated(mixers(1)%diis) .and. iscf < mixers(1)%diis%start) then
         do spin=1,wfn%nspin
             call mixers(spin)%diis%diff(wfn%coeff(:,:,spin))
         end do

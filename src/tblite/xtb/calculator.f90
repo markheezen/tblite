@@ -93,6 +93,8 @@ module tblite_xtb_calculator
       integer, allocatable :: mixer_type
       !> Memory of the mixer
       integer :: mixer_mem
+      !> Start iteration of the mixer
+      integer :: mixer_start
    contains
       !> Get information about density dependent quantities used in the energy
       procedure :: variable_info

@@ -31,6 +31,7 @@ module tblite_scf_mixer
    type, public, abstract :: mixer_type
       integer :: ndim
       integer :: memory
+      integer :: start
       type(c_ptr) :: ptr
    contains
       !> Apply mixing to the density

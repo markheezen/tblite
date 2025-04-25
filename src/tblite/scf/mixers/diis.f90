@@ -39,12 +39,13 @@ module tblite_scf_mixer_diis
    end type diis_type
 
    interface
-      type(c_ptr) function c_new_diis(ndim, memory, alpha, nao) bind(C,name="SetupDIIS")
+      type(c_ptr) function c_new_diis(ndim, memory, alpha, nao, start) bind(C,name="SetupDIIS")
          use iso_c_binding
          integer(c_int), value :: ndim
          integer(c_int), value :: memory
          real(c_double), value :: alpha
          integer(c_int), value :: nao
+         integer(c_int), value :: start
       end function c_new_diis
 
       subroutine construct_error_vec_dp(mixer,fock,density,overlap) bind(C,name="ConstructErrorDP")
@@ -139,7 +140,8 @@ contains
 
       self%ndim = calc%bas%nao**2
       self%memory = calc%mixer_mem
-      self%ptr = c_new_diis(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
+      self%start = calc%mixer_start
+      self%ptr = c_new_diis(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao, self%start)
    end subroutine new_diis
 
    !> Calculate the error vector used for mixing

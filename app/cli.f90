@@ -95,6 +95,8 @@ module tblite_cli
       integer, allocatable :: mixer
       !> Memory of the mixer
       integer, allocatable :: mixer_memory
+      !> Start iteration of the mixer
+      integer, allocatable :: mixer_start
       !> Use of the ROKS method
       logical, allocatable :: roks
       !> ROKS start
@@ -507,6 +509,16 @@ subroutine get_run_arguments(config, list, start, error)
          if (allocated(error)) exit
          if (config%mixer_memory <= 0) then
             call fatal_error(error,"Mixmem must be larger than 0")
+         end if
+
+      case("--mixstart")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         allocate(config%mixer_start)
+         call get_argument_as_int(arg, config%mixer_start, error)
+         if (allocated(error)) exit
+         if (config%mixer_start < 2) then
+            call fatal_error(error,"Mixstart must be larger than 1")
          end if
 
       case ("--roks")

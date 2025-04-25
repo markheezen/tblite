@@ -146,10 +146,12 @@ module tblite_cli_help
       "--mixer <int>              Set the type of convergence accelerator (mixer),"//nl//&
       "                           It can be Broyden (0) or DIIS (1)."//nl//&
       "      --mixmem <int>       Set the number of past iterations to be used by the mixer."//nl//&
+      "      --mixstart <int>     Set the starting iteration for the mixer (before damping is used)."//nl//&
       "--roks                     Perform Restricted Open Shell Kohn Sham calculation"//nl//&
       "      --roks-start <int>   Set the type of initial guess to use for ROKS:"//nl//&
       "                           first SCF iteration (0) or fully converged SCF (1)."//nl//&
       "      --post-processing <file>"//nl//&
+      
       "                           Add post processing methods to the calculation"//nl//&
       "                           by using a toml file as input."//nl//&
       "      --post-processing <name>"//nl//&

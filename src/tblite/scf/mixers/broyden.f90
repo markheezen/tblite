@@ -43,12 +43,13 @@ module tblite_scf_mixer_broyden
    end type broyden_type
 
    interface
-      type(c_ptr) function c_new_broyden(ndim, memory, alpha, nao) bind(C,name="SetupBroyden")
+      type(c_ptr) function c_new_broyden(ndim, memory, alpha, nao, start) bind(C,name="SetupBroyden")
          use iso_c_binding
          integer(c_int), value :: ndim
          integer(c_int), value :: memory
          real(c_double), value :: alpha
          integer(c_int), value :: nao
+         integer(c_int), value :: start
       end function c_new_broyden
 
       subroutine set_mixer_data_dp(mixer,target,size) bind(C,name="SetDataDP")
@@ -111,7 +112,8 @@ contains
 
       self%ndim = wfn%nspin * self%get_dimension(mol,calc%bas,info)
       self%memory = calc%mixer_mem
-      self%ptr = c_new_broyden(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao)
+      self%start = calc%mixer_start
+      self%ptr = c_new_broyden(self%ndim, self%memory, calc%mixer_damping, calc%bas%nao, self%start)
    end subroutine new_broyden
 
    !> Get the dimensionality of the mixer
