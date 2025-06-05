@@ -124,6 +124,13 @@ module tblite_cli_help
       "      --iterations <int>   Maximum number of SCF iterations (Default: 250)"//nl//&
       "      --solver <name>      Electronic solver for SCF, possible options:"//nl//&
       "                           gvd (default), and gvr"//nl//&
+      "      --mixer <name>       Set the type of convergence accelerator (mixer) possible options:"//nl//&
+      "                           broyden (default), gambits-broyden, gambits-diis."//nl//&
+      "      --mixer-memory <int> Number of past iterations to be used by the mixer."//nl//&
+      "      --mixer-precision<name>"//nl//&
+      "                           Precision to be used by the mixer: single (default) or double"//nl//&
+      "      --mixer-runmode<name>Mixer runmode: default (size-dependent), cpu or gpu"//nl//&
+      "      --mixer-damping<real>Damping factor for mixing (default: 0.4)"//nl//&
       "      --efield <real>,<real>,<real>"//nl//&
       "                           Homogeneous electric field in V/Å."//nl//&
       "      --alpb <name>        Use analytical linearized Poisson-Boltzmann (ALPB) solvation model."//nl//&

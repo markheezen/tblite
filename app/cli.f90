@@ -24,6 +24,7 @@ module tblite_cli
       & help_text_fit, help_text_tagdiff, help_text_guess
    use tblite_features, only : get_tblite_feature
    use tblite_lapack_solver, only : lapack_algorithm
+   use tblite_scf_mixer_input, only : mixer_input, mixer_type, mixer_precision, mixer_runmode
    use tblite_solvation, only : solvation_input, cpcm_input, alpb_input, &
       & cds_input, shift_input, solvent_data, get_solvent_data, solution_state, born_kernel
    use tblite_version, only : get_tblite_version
@@ -76,6 +77,8 @@ module tblite_cli
       real(wp) :: accuracy = 1.0_wp
       !> Maximum number of iterations for SCF
       integer, allocatable :: max_iter
+      !> Mixing parameters
+      type(mixer_input), allocatable :: mixer
       !> Electronic temperature
       real(wp) :: etemp = 300.0_wp
       !> Electronic temperature for the guess (currently only CEH)
@@ -492,6 +495,70 @@ subroutine get_run_arguments(config, list, start, error)
          allocate(config%max_iter)
          call get_argument_as_int(arg, config%max_iter, error)
          if (allocated(error)) exit
+
+      case("--mixer")
+      iarg = iarg + 1
+      call list%get(iarg, arg)
+      if (.not. allocated(config%mixer)) allocate(config%mixer)
+      select case (arg)
+      case ("broyden")
+         config%mixer%type = mixer_type%broyden
+      case ("gambits-broyden")
+         config%mixer%type = mixer_type%gambits_broyden
+      case ("gambits-diis")
+         config%mixer%type = mixer_type%gambits_diis
+      case default
+         call fatal_error(error,"Mixer must be either broyden, gambits-broyden or gambits-diis")
+      end select
+   
+      case("--mixer-memory")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         if (.not. allocated(config%mixer)) allocate(config%mixer)
+         call get_argument_as_int(arg, config%mixer%memory(1), error)
+         if (allocated(error)) exit
+         config%mixer%memory = config%mixer%memory(1)
+         if (config%mixer%memory(1) <= 0) then
+            call fatal_error(error,"Mixer-memory must be larger than 0")
+         end if
+
+      case("--mixer-precision")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         if (.not. allocated(config%mixer)) allocate(config%mixer)
+         select case (arg)
+         case ("single")
+            config%mixer%prec = mixer_precision%single
+         case ("double")
+            config%mixer%prec = mixer_precision%double
+         case default
+            call fatal_error(error,"Mixer-precision must be single or double")
+         end select
+
+      case("--mixer-runmode")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         if (.not. allocated(config%mixer)) allocate(config%mixer)
+         select case (arg)
+         case ("default")
+            config%mixer%runmode = mixer_runmode%default
+         case ("cpu")
+            config%mixer%runmode = mixer_runmode%cpu
+         case("gpu")
+            config%mixer%runmode = mixer_runmode%gpu
+         case default
+            call fatal_error(error,"Mixer-runmode must be either default (size-dependent), cpu, or gpu")
+         end select
+
+      case("--mixer-damping")
+         iarg = iarg + 1
+         call list%get(iarg, arg)
+         if (.not. allocated(config%mixer)) allocate(config%mixer)
+         call get_argument_as_real(arg, config%mixer%damp, error)
+         if (allocated(error)) exit
+         if (config%mixer%damp < 0 .or. config%mixer%damp > 1) then
+            call fatal_error(error,"Mixer-damping must be between 0 and 1")
+      end if
 
       case("--solver")
          iarg = iarg + 1
