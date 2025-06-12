@@ -62,7 +62,7 @@ module tblite_scf_gambits_diis
          real(c_double), value :: alpha
          real(c_double), intent(in) :: overlap(*)
          integer(c_int), value :: nao
-         integer(c_int), value :: runmode
+         integer(c_int), intent(inout) :: runmode
          integer(c_int), value :: io_prec
          integer(c_int), value :: prec
       end function c_new_diis
@@ -162,7 +162,7 @@ module tblite_scf_gambits_diis
 
 contains
 
-subroutine new_gambits_diis(self, ndim, memory, alpha, overlap, nao, runmode, io_prec, prec)
+subroutine new_gambits_diis(self, ndim, memory, alpha, overlap, nao, runmode, io_prec, prec, used_prec)
    !> Instance of the GAMBITS DIIS mixer
    class(gambits_diis_type), intent(out) :: self
    !> Number of dimensions for the mixer
@@ -181,8 +181,14 @@ subroutine new_gambits_diis(self, ndim, memory, alpha, overlap, nao, runmode, io
    integer, intent(in) :: io_prec
    !> Working precision (FP32: 0, FP64: 1)
    integer, intent(in) :: prec
+   !> Used runmode (cpu: 1, gpu: 2)
+   integer, allocatable :: used_runmode
 
-   self%ptr = c_new_diis(ndim, memory, alpha, overlap, nao, runmode, io_prec, prec)
+   integer, allocatable :: runmode_c
+   allocate(runmode_c,source=runmode)
+
+   self%ptr = c_new_diis(ndim, memory, alpha, overlap, nao, runmode_c, io_prec, prec)
+   call move_alloc(runmode_c, used_runmode)
 
 end subroutine new_gambits_diis
 
