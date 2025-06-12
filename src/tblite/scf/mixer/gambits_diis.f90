@@ -162,7 +162,7 @@ module tblite_scf_gambits_diis
 
 contains
 
-subroutine new_gambits_diis(self, ndim, memory, alpha, overlap, nao, runmode, io_prec, prec, used_prec)
+subroutine new_gambits_diis(self, ndim, memory, alpha, overlap, nao, runmode, io_prec, prec, used_runmode)
    !> Instance of the GAMBITS DIIS mixer
    class(gambits_diis_type), intent(out) :: self
    !> Number of dimensions for the mixer
