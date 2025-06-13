@@ -1,4 +1,4 @@
-module test_mixers
+module test_mixers_gpu
    use mctc_env, only : wp
    use mctc_env_testing, only : new_unittest, unittest_type, error_type, test_failed
    use mctc_io, only : structure_type
@@ -16,78 +16,18 @@ module test_mixers
    real(wp), parameter :: thr = 100*epsilon(1.0_wp)
    real(wp), parameter :: acc = 0.1_wp
    real(wp), parameter :: kt = 300.0_wp * 3.166808578545117e-06_wp
-   public :: collect_mixers
+   public :: collect_mixers_gpu
 contains
 
-subroutine collect_mixers(testsuite)
+subroutine collect_mixers_gpu(testsuite)
    !> Collection of tests
    type(unittest_type), allocatable, intent(out) :: testsuite(:)
 
-   testsuite = [ &
-      new_unittest("mixers-broyden", test_broyden),&
-      new_unittest("test-diis-cpu", test_diis_cpu)]
+   testsuite = [new_unittest("test-diis-gpu", test_diis_gpu)]
 
-end subroutine collect_mixers
+end subroutine collect_mixers_gpu
 
-subroutine test_broyden(error)
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-   type(context_type) :: ctx
-   type(structure_type) :: mol
-   type(xtb_calculator) :: calc
-   type(wavefunction_type) :: wfn
-   type(mixer_input) :: mixer_config
-   type(results_type) :: res
-
-   integer, parameter :: nat=12
-   real(wp) :: energy = 0.0_wp
-   real(wp) :: perr = 0.0_wp
-   real(wp), parameter :: xyz(3, nat) = reshape((/&
-   &1.06880660023529,       -0.46478030005927,        0.00009471732781,&
-   &2.45331325533661,       -0.46484444142679,        0.00042084312846,&
-   &3.14559996373466,        0.73409173401801,        0.00008724271521,&
-   &2.45340597395333,        1.93314591537421,       -0.00086301044874,&
-   &1.06895328716368,        1.93321130458200,       -0.00141386731889,&
-   &0.37663958202671,        0.73422879200405,       -0.00090929198808,&
-   &0.52864276199175,       -1.40035288735680,        0.00049380958906,&
-   &2.99337903563419,       -1.40047547903112,        0.00121759015506,&
-   &4.22591259698321,        0.73408789322206,        0.00025398801936,&
-   &2.99365942822711,        2.86866756976346,       -0.00166131228918,&
-   &0.52879830433456,        2.86879139255056,       -0.00224874122149,&
-   &-0.70367266962110,        0.73433126635962,       -0.00138296766859&
-   &/),shape=(/3,nat/))
-   integer, parameter :: num(nat) = (/6,6,6,6,6,6,1,1,1,1,1,1/)
-
-   call new(mol, num, xyz*aatoau, uhf=0, charge=0.0_wp)
-   call new_gfn2_calculator(calc, mol, error)
-   
-   mixer_config%type = mixer_type%broyden
-   mixer_config%memory = 250
-   mixer_config%nao = calc%bas%nao
-   mixer_config%prec = mixer_precision%double
-   mixer_config%damp = 0.4_wp
-
-   calc%mixer_info = mixer_config
-   call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, results=res)
-
-   perr = res%perr
-
-   call new(mol, num, xyz*aatoau, uhf=0, charge=0.0_wp)
-   call new_gfn2_calculator(calc, mol, error)
-   mixer_config%type = mixer_type%gambits_broyden
-   calc%mixer_info = mixer_config
-   call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, results=res)
-
-   if (abs(res%perr - perr) > thr) then
-      call test_failed(error, "GAMBITS Broyden mixing does not give the same density error as native Broyden mixing.")
-      print '(2es21.14)', perr, res%perr
-   end if
-
-end subroutine test_broyden
-
-subroutine test_diis_cpu(error)
+subroutine test_diis_gpu(error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
    type(context_type) :: ctx
@@ -126,11 +66,33 @@ subroutine test_diis_cpu(error)
    &/),shape=(/3,nat/))
    integer, parameter :: num(nat) = (/7,1,6,1,6,6,1,1,1,8,6,6,1,1,1,8,7,1,6,1,1,1/)
 
+
    call new(mol, num, xyz*aatoau, uhf=0, charge=0.0_wp)
    call new_gfn2_calculator(calc, mol, error)
    
    mixer_config%type = mixer_type%gambits_diis
-   mixer_config%memory = 10
+   mixer_config%memory = 5
+   mixer_config%nao = calc%bas%nao
+   mixer_config%runmode = mixer_runmode%gpu
+   mixer_config%prec = mixer_precision%double
+   mixer_config%damp = 0.4_wp
+
+   calc%mixer_info = mixer_config
+   call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, results=res)
+
+   if (calc%mixer_info%runmode /= 2) then
+      call test_failed(error, "GAMBITS DIIS mixing does not run on the GPU")
+      return
+   end if
+
+   perr = res%perr
+
+   call new(mol, num, xyz*aatoau, uhf=0, charge=0.0_wp)
+   call new_gfn2_calculator(calc, mol, error)
+   
+   mixer_config%type = mixer_type%gambits_diis
+   mixer_config%memory = 5
    mixer_config%nao = calc%bas%nao
    mixer_config%runmode = mixer_runmode%cpu
    mixer_config%prec = mixer_precision%double
@@ -140,13 +102,11 @@ subroutine test_diis_cpu(error)
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
    call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, results=res)
 
-   perr = 4.68256077468254E-07_wp
-
    if (abs(res%perr - perr) > thr) then
-      call test_failed(error, "GAMBITS DIIS CPU mixing does not give the correct density error.")
+      call test_failed(error, "GAMBITS DIIS CPU and GPU mixing do not give the same density error.")
       print '(2es21.14)', perr, res%perr
    end if
 
-end subroutine test_diis_cpu
+end subroutine test_diis_gpu
 
-end module test_mixers
+end module test_mixers_gpu
