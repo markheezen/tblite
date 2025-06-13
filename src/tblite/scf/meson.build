@@ -22,4 +22,5 @@ srcs += files(
   'mixer.f90',
   'potential.f90',
   'solver.f90',
+  'utils.f90',
 )

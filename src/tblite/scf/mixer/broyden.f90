@@ -21,20 +21,13 @@
 module tblite_scf_mixer_broyden
    use mctc_env, only : wp, error_type, fatal_error
    use tblite_lapack, only : getrf, getrs
+   use tblite_scf_mixer_input, only : mixer_input
    use tblite_scf_mixer_type, only : mixer_type
+   use tblite_wavefunction, only : wavefunction_type
    implicit none
    private
 
    public :: new_broyden
-
-
-   !> Configuration for the Broyden mixer
-   type, public :: broyden_input
-      !> Number of steps to keep in memory
-      integer :: memory
-      !> Damping parameter
-      real(wp) :: damp
-   end type broyden_input
 
    !> Electronic mixer using modified Broyden scheme
    type, public, extends(mixer_type) :: broyden_mixer
@@ -70,55 +63,62 @@ contains
 
 !> Create new instance of electronic mixer
 subroutine new_broyden(self, ndim, input)
-   !> Instance of the mixer
+   !> Instance of the Broyden mixer
    type(broyden_mixer), intent(out) :: self
    !> Number of variables to consider
    integer, intent(in) :: ndim
    !> Configuration of the Broyden mixer
-   type(broyden_input), intent(in) :: input
+   type(mixer_input), intent(in) :: input
 
    self%ndim = ndim
-   self%memory = input%memory
+   self%memory = input%memory(input%type)
    self%iter = 0
    self%iset = 0
    self%idif = 0
    self%iget = 0
    self%damp = input%damp
-   allocate(self%df(ndim, input%memory))
-   allocate(self%u(ndim, input%memory))
-   allocate(self%a(input%memory, input%memory))
+   allocate(self%df(ndim, input%memory(input%type)))
+   allocate(self%u(ndim, input%memory(input%type)))
+   allocate(self%a(input%memory(input%type), input%memory(input%type)))
    allocate(self%dq(ndim))
    allocate(self%dqlast(ndim))
    allocate(self%qlast_in(ndim))
-   allocate(self%omega(input%memory))
+   allocate(self%omega(input%memory(input%type)))
    allocate(self%q_in(ndim))
+
 end subroutine new_broyden
 
 !> Set new density from 1D array
 subroutine set_1d(self, qvec)
-   !> Instance of the mixer
+   !> Instance of the Broyden mixer
    class(broyden_mixer), intent(inout) :: self
    !> Density vector
    real(wp), intent(in) :: qvec(:)
+
    self%q_in(self%iset+1:self%iset+size(qvec)) = qvec
    self%iset = self%iset + size(qvec)
 end subroutine set_1d
 
 !> Set difference between new and old density from 1D array
 subroutine diff_1d(self, qvec)
-   !> Instance of the mixer
+   !> Instance of the Broyden mixer
    class(broyden_mixer), intent(inout) :: self
    !> Density vector
    real(wp), intent(in) :: qvec(:)
+
    self%dq(self%idif+1:self%idif+size(qvec)) = qvec &
       & - self%q_in(self%idif+1:self%idif+size(qvec))
    self%idif = self%idif + size(qvec)
 end subroutine diff_1d
 
 !> Apply mixing to the density
-subroutine next(self, error)
-   !> Instance of the mixer
+subroutine next(self, iscf, wfn, error)
+   !> Instance of the Broyden mixer
    class(broyden_mixer), intent(inout) :: self
+   !> Iteration counter
+   integer, intent(in) :: iscf
+   !> Tight-binding wavefunction data
+   type(wavefunction_type), intent(inout) :: wfn
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
@@ -137,10 +137,11 @@ end subroutine next
 
 !> Get density as 1D array
 subroutine get_1d(self, qvec)
-   !> Instance of the mixer
+   !> Instance of the Broyden mixer
    class(broyden_mixer), intent(inout) :: self
    !> Density vector
    real(wp), intent(out) :: qvec(:)
+
    qvec(:) = self%q_in(self%iget+1:self%iget+size(qvec))
    self%iget = self%iget + size(qvec)
 end subroutine get_1d
@@ -236,7 +237,6 @@ subroutine broyden(n, q, qlast, dq, dqlast, iter, memory, alpha, omega, df, u, a
       i = mod(j - 1, memory) + 1
       q(:) = q - omega(i) * c(i, 1) * u(:, i)
    end do
-
 end subroutine broyden
 
 subroutine lineq(a, c, info)
@@ -255,10 +255,12 @@ subroutine lineq(a, c, info)
    endif
 end subroutine lineq
 
-pure function get_error(self) result(error)
+pure function get_error(self,iscf) result(error)
    class(broyden_mixer), intent(in) :: self
+   integer, intent(in) :: iscf
    real(wp) :: error
    integer :: i
+
    error = 0.0_wp
    do i = 1, size(self%dq)
       error = error + self%dq(i)**2 / size(self%dq)

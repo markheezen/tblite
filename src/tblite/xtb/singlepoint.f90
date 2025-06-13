@@ -33,12 +33,12 @@ module tblite_xtb_singlepoint
    use tblite_lapack_sygvr, only : sygvr_solver
    use tblite_output_format, only : format_string
    use tblite_results, only : results_type
-   use tblite_scf, only : mixer_type, new_mixer, scf_info, next_scf, &
-      & get_mixer_dimension, potential_type, new_potential
+   use tblite_scf, only : get_mixer_dimension, new_mixer, new_potential, &
+      & next_scf, mixers_type, potential_type, scf_info
    use tblite_scf_solver, only : solver_type
    use tblite_timer, only : timer_type, format_time
-   use tblite_wavefunction, only : wavefunction_type, get_density_matrix, &
-      & get_alpha_beta_occupation, &
+   use tblite_wavefunction, only : wavefunction_type, &
+      & get_alpha_beta_occupation, get_density_matrix, &
       & magnet_to_updown, updown_to_magnet
    use tblite_xtb_calculator, only : xtb_calculator
    use tblite_xtb_h0, only : get_selfenergy, get_hamiltonian, get_occupation, &
@@ -91,7 +91,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    !> Container for storing additional results
    type(results_type), intent(out), optional :: results
    type(post_processing_list), intent(inout), optional :: post_process
-   
+
    logical :: grad, converged, econverged, pconverged
    integer :: prlevel
    real(wp) :: econv, pconv, cutoff, elast, nel
@@ -102,14 +102,14 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    real(wp), allocatable :: tmp(:)
    type(potential_type) :: pot
    type(container_cache), allocatable :: ccache, dcache, icache, hcache, rcache
-   class(mixer_type), allocatable :: mixer
+   type(mixers_type) :: mixers
    type(timer_type) :: timer
    type(error_type), allocatable :: error
    type(scf_info) :: info
    class(solver_type), allocatable :: solver
    type(adjacency_list) :: list
    type(container_cache), allocatable :: cache_list(:)
-   
+
    integer :: iscf, spin
 
    call timer%push("total")
@@ -239,8 +239,9 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    iscf = 0
    converged = .false.
    info = calc%variable_info()
-   call new_mixer(mixer, calc%max_iter, wfn%nspin*get_mixer_dimension(mol, calc%bas, info), &
-      & calc%mixer_damping)
+   call new_mixer(mixers, calc%mixer_info, get_mixer_dimension(mol, calc%bas, info), &
+      & calc%bas%nao, wfn%nspin, ints%overlap, info)
+
    if (prlevel > 0) then
       call ctx%message(repeat("-", 60))
       call ctx%message("  cycle        total energy    energy error   density error")
@@ -248,26 +249,27 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    end if
    do while(.not.converged .and. iscf < calc%max_iter)
       elast = sum(eelec)
-      call next_scf(iscf, mol, calc%bas, wfn, solver, mixer, info, &
-         & calc%coulomb, calc%dispersion, calc%interactions, ints, pot, &
-         & ccache, dcache, icache, eelec, error)
+      call next_scf(iscf, mol, calc%bas, wfn, solver, mixers, &
+         & info, calc%coulomb, calc%dispersion, calc%interactions, ints, &
+         & pot, ccache, dcache, icache, eelec, error)
       econverged = abs(sum(eelec) - elast) < econv
-      pconverged = mixer%get_error() < pconv
+      pconverged = mixers%get_error_mixer(iscf) < pconv
       converged = econverged .and. pconverged
       if (prlevel > 0) then
          call ctx%message(format_string(iscf, "(i7)") // &
-            & format_string(sum(eelec + energies), "(g24.13)") // &
-            & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
-            & format_string(sum(eelec) - elast, "(es16.7)") // &
-            & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
-            & format_string(mixer%get_error(), "(es16.7)") // &
-            & escape(ctx%terminal%reset))
+         & format_string(sum(eelec + energies), "(g24.13)") // &
+         & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
+         & format_string(sum(eelec) - elast, "(es16.7)") // &
+         & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
+         & format_string(mixers%get_error_mixer(iscf), "(es16.7)") // &
+         & escape(ctx%terminal%reset))
       end if
       if (allocated(error)) then
          call ctx%set_error(error)
          exit
       end if
    end do
+   call mixers%cleanup_mixer()
    if (prlevel > 0) then
       call ctx%message(repeat("-", 60))
       call ctx%message("")
@@ -330,6 +332,9 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       end if
       call timer%pop
    end if
+
+   if (ctx%failed()) return
+
    if (present(post_process)) then
       call timer%push("post processing")
       call collect_containers_caches(rcache, ccache, hcache, dcache, icache, calc, cache_list)
@@ -379,8 +384,6 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       call fatal_error(error, "SCF not converged in "//format_string(iscf, '(i0)')//" cycles")
       call ctx%set_error(error)
    end if
-
-
 end subroutine xtb_singlepoint
 
 end module tblite_xtb_singlepoint
