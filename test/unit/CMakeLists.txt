@@ -33,6 +33,7 @@ set(
   "ncoord"
   "npy"
   "npz"
+  "mixers"
   "post-processing"
   "repulsion"
   "slater-expansion"

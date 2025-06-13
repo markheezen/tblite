@@ -68,8 +68,6 @@ end type enum_runmode
       integer :: prec = mixer_precision%single
       !> DIIS runmode (size-dependent: 0, cpu: 1, gpu: 2)
       integer :: runmode = mixer_runmode%default
-      !> DIIS used runmode (cpu: 1, gpu: 2)
-      integer, allocatable :: used_runmode
    end type mixer_input
 
 end module tblite_scf_mixer_input

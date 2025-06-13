@@ -44,6 +44,7 @@ tests = [
   'integral-overlap',
   'integral-multipole',
   'ipea1-xtb',
+  'mixers',
   'ncoord',
   'npy',
   'npz',

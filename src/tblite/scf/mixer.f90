@@ -45,7 +45,7 @@ subroutine new_mixer(self, input, ndim, nao, nspin, overlap, info)
    !> Instance of the mixer on exit
    class(mixers_type), intent(out) :: self
    !> Mixer input parameters
-   type(mixer_input), intent(in) :: input
+   type(mixer_input), intent(inout) :: input
    !> Dimensions of the Broyden mixers
    integer, intent(in) :: ndim
    !> Number of atomic orbitals
@@ -94,7 +94,7 @@ subroutine new_mixer(self, input, ndim, nao, nspin, overlap, info)
          allocate(mixer(nspin))
          do i=1,nspin
             call new_gambits_diis(mixer(i), nao**2, input%memory(input%type), input%damp, overlap, nao, &
-               & input%runmode, prec, input%prec, input%used_runmode)
+               & input%runmode, prec, input%prec)
             call mixer(i)%diis_info(info)
             mixer(i)%nspin = nspin
             mixer(i)%channel = i
