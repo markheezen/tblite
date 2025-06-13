@@ -75,7 +75,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
    !> Single-point calculator
-   type(xtb_calculator), intent(in) :: calc
+   type(xtb_calculator), intent(inout) :: calc
    !> Wavefunction data
    type(wavefunction_type), intent(inout) :: wfn
    !> Accuracy for computation
@@ -269,7 +269,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
          exit
       end if
    end do
-   call mixers%cleanup_mixer()
+   
    if (prlevel > 0) then
       call ctx%message(repeat("-", 60))
       call ctx%message("")
@@ -278,6 +278,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    energy = sum(energies)
    if (present(results)) then
       results%energies = energies
+      results%perr = mixers%get_error_mixer(iscf)
    end if
    call timer%pop
 
@@ -286,7 +287,8 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       call ctx%message(label_total // format_string(sum(energies), real_format) // " Eh")
       call ctx%message("")
    end if
-
+   
+   call mixers%cleanup_mixer()
    call ctx%delete_solver(solver)
    if (ctx%failed()) return
 

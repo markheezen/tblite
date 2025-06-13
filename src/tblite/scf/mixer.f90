@@ -45,7 +45,7 @@ subroutine new_mixer(self, input, ndim, nao, nspin, overlap, info)
    !> Instance of the mixer on exit
    class(mixers_type), intent(out) :: self
    !> Mixer input parameters
-   type(mixer_input), intent(in) :: input
+   type(mixer_input), intent(inout) :: input
    !> Dimensions of the Broyden mixers
    integer, intent(in) :: ndim
    !> Number of atomic orbitals

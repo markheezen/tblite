@@ -62,7 +62,7 @@ module tblite_scf_gambits_diis
          real(c_double), value :: alpha
          real(c_double), intent(in) :: overlap(*)
          integer(c_int), value :: nao
-         integer(c_int), value :: runmode
+         integer(c_int), intent(inout) :: runmode
          integer(c_int), value :: io_prec
          integer(c_int), value :: prec
       end function c_new_diis
@@ -176,7 +176,7 @@ subroutine new_gambits_diis(self, ndim, memory, alpha, overlap, nao, runmode, io
    !> Number of atomic orbitals
    integer, intent(in) :: nao
    !> Runmode (size-dependent: 0, cpu: 1, gpu: 2)
-   integer, intent(in) :: runmode
+   integer, intent(inout) :: runmode
    !> IO precision (FP32: 0, FP64: 1)
    integer, intent(in) :: io_prec
    !> Working precision (FP32: 0, FP64: 1)
