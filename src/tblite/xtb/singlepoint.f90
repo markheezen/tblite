@@ -253,7 +253,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    end if
    do while(.not.converged .and. iscf < calc%max_iter)
       elast = sum(eelec)
-      call next_scf(iscf, ctx, mol, calc%bas, wfn, solver, mixers, &
+      call next_scf(iscf, mol, calc%bas, wfn, solver, mixers, &
          & info, calc%coulomb, calc%dispersion, calc%interactions, ints, &
          & pot, ccache, dcache, icache, eelec, error)
       econverged = abs(sum(eelec) - elast) < econv

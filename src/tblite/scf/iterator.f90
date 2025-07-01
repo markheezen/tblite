@@ -44,12 +44,10 @@ module tblite_scf_iterator
 contains
 
 !> Evaluate self-consistent iteration for the density-dependent Hamiltonian
-subroutine next_scf(iscf, ctx, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
+subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
       & interactions, ints, pot, ccache, dcache, icache, energies, error)
    !> Current iteration count
    integer, intent(inout) :: iscf
-   !> Calculation context
-   type(context_type), intent(inout) :: ctx
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
    !> Basis set information
