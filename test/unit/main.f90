@@ -95,8 +95,6 @@ program tester
       new_testsuite("mixers", collect_mixers) &
       ]
 
-      
-
    call get_argument(1, suite_name)
    call get_argument(2, test_name)
 
