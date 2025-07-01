@@ -30,6 +30,7 @@ end subroutine collect_mixers_gpu
 subroutine test_diis_gpu(error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
+#ifdef USE_CUDA
    type(context_type) :: ctx
    type(structure_type) :: mol
    type(xtb_calculator) :: calc
@@ -106,7 +107,7 @@ subroutine test_diis_gpu(error)
       call test_failed(error, "GAMBITS DIIS CPU and GPU mixing do not give the same density error.")
       print '(2es21.14)', perr, res%perr
    end if
-
+#endif
 end subroutine test_diis_gpu
 
 end module test_mixers_gpu

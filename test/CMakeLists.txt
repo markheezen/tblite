@@ -18,7 +18,3 @@ if(WITH_API)
   add_subdirectory("api")
 endif()
 add_subdirectory("unit")
-
-if(GPU)
-  add_subdirectory("unit_gpu")
-endif()
