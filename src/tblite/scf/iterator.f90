@@ -23,7 +23,6 @@ module tblite_scf_iterator
    use mctc_io, only : structure_type
    use tblite_basis_type, only : basis_type
    use tblite_container, only : container_cache, container_list
-   use tblite_context, only : context_type
    use tblite_disp, only : dispersion_type
    use tblite_integral_type, only : integral_type
    use tblite_wavefunction_type, only : wavefunction_type
