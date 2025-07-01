@@ -90,9 +90,9 @@ subroutine next_scf(iscf, ctx, mol, bas, wfn, solver, mixer, info, coulomb, disp
    real(wp) :: ts
 
    if (iscf > 0 .and. (mixer%kind(1) == mixer_kind%broyden .or. mixer%kind(1) == mixer_kind%gambits_broyden)) then
-      call mixer%next_mixer(ctx, iscf, wfn, error)
+      call mixer%next_mixer(iscf, wfn, error)
+      call mixer%get_mixer(bas, wfn, error)
       if (allocated(error)) return
-      call mixer%get_mixer(ctx, bas, wfn, error)
    end if
 
    iscf = iscf + 1
@@ -108,12 +108,12 @@ subroutine next_scf(iscf, ctx, mol, bas, wfn, solver, mixer, info, coulomb, disp
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-   call mixer%set_mixer(ctx, wfn, error)
+   call mixer%set_mixer(wfn)
 
    if (mixer%kind(1) == mixer_kind%gambits_diis .and. iscf > 1) then
-      call mixer%next_mixer(ctx, iscf, wfn, error)
+      call mixer%next_mixer(iscf, wfn, error)
+      call mixer%get_mixer(bas, wfn, error)
       if (allocated(error)) return
-      call mixer%get_mixer(ctx, bas, wfn, error)
    end if
 
    call get_density(wfn, solver, ints, ts, error)
@@ -128,7 +128,8 @@ subroutine next_scf(iscf, ctx, mol, bas, wfn, solver, mixer, info, coulomb, disp
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   call mixer%diff_mixer(ctx, wfn, error)
+   call mixer%diff_mixer(wfn, error)
+   if (allocated(error)) return
 
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)

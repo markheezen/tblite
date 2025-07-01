@@ -240,7 +240,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    converged = .false.
    info = calc%variable_info()
    call new_mixer(mixers, ctx, calc%mixer_info, get_mixer_dimension(mol, calc%bas, info), &
-      & calc%bas%nao, wfn%nspin, ints%overlap, info, prlevel, error)
+      & calc%bas%nao, wfn%nspin, ints%overlap, info, error)
    if (allocated(error)) then
       call ctx%set_error(error)
       return
@@ -257,7 +257,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
          & info, calc%coulomb, calc%dispersion, calc%interactions, ints, &
          & pot, ccache, dcache, icache, eelec, error)
       econverged = abs(sum(eelec) - elast) < econv
-      pconverged = mixers%get_error_mixer(iscf, error, ctx) < pconv
+      pconverged = mixers%get_error_mixer(iscf) < pconv
       converged = econverged .and. pconverged
       if (prlevel > 0) then
          call ctx%message(format_string(iscf, "(i7)") // &
@@ -265,7 +265,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
          & escape(merge(ctx%terminal%green, ctx%terminal%red, econverged)) // &
          & format_string(sum(eelec) - elast, "(es16.7)") // &
          & escape(merge(ctx%terminal%green, ctx%terminal%red, pconverged)) // &
-         & format_string(mixers%get_error_mixer(iscf, error, ctx), "(es16.7)") // &
+         & format_string(mixers%get_error_mixer(iscf), "(es16.7)") // &
          & escape(ctx%terminal%reset))
       end if
       if (allocated(error)) then
@@ -282,7 +282,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
    energy = sum(energies)
    if (present(results)) then
       results%energies = energies
-      results%perr = mixers%get_error_mixer(iscf, error, ctx)
+      results%perr = mixers%get_error_mixer(iscf)
    end if
    call timer%pop
 
@@ -292,8 +292,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigm
       call ctx%message("")
    end if
 
-   if (prlevel > 2) call mixers%timings(ctx)
-   call mixers%cleanup_mixer(error, ctx)
+   call mixers%cleanup_mixer()
    call ctx%delete_solver(solver)
    if (ctx%failed()) return
 
