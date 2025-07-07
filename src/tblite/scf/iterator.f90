@@ -29,7 +29,7 @@ module tblite_scf_iterator
    use tblite_wavefunction_mulliken, only : get_mulliken_shell_charges, &
    & get_mulliken_atomic_multipoles
    use tblite_xtb_coulomb, only : tb_coulomb
-   use tblite_scf_mixer_input, only : mixer_type
+   use tblite_scf_mixer_input, only : mixer_kind
    use tblite_scf_mixer_type, only : mixers_type
    use tblite_scf_info, only : scf_info
    use tblite_scf_potential, only : potential_type, add_pot_to_h1
@@ -43,9 +43,8 @@ module tblite_scf_iterator
 contains
 
 !> Evaluate self-consistent iteration for the density-dependent Hamiltonian
-subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, &
-& coulomb, dispersion, interactions, ints, pot, ccache, dcache, icache, &
-& energies, error)
+subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
+      & interactions, ints, pot, ccache, dcache, icache, energies, error)
    !> Current iteration count
    integer, intent(inout) :: iscf
    !> Molecular structure data
@@ -66,6 +65,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, &
    class(dispersion_type), intent(in), optional :: dispersion
    !> Container for general interactions
    type(container_list), intent(in), optional :: interactions
+
    !> Integral container
    type(integral_type), intent(in) :: ints
    !> Density dependent potential shifts
@@ -76,22 +76,23 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, &
    type(container_cache), intent(inout), optional :: dcache
    !> Restart data for interaction containers
    type(container_cache), intent(inout), optional :: icache
+
    !> Self-consistent energy
    real(wp), intent(inout) :: energies(:)
+
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   if (iscf > 0 .and. (mixer%type(1) == mixer_type%broyden .or. mixer%type(1) == mixer_type%gambits_broyden)) then
+   if (iscf > 0 .and. (mixer%kind(1) == mixer_kind%broyden .or. mixer%kind(1) == mixer_kind%gambits_broyden)) then
       call mixer%next_mixer(iscf, wfn, error)
+      call mixer%get_mixer(bas, wfn, error)
       if (allocated(error)) return
-      call mixer%get_mixer(bas, wfn)
    end if
 
    iscf = iscf + 1
-
    call pot%reset
    if (present(coulomb) .and. present(ccache)) then
       call coulomb%get_potential(mol, ccache, wfn, pot)
@@ -106,25 +107,26 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, &
 
    call mixer%set_mixer(wfn)
 
-   if (mixer%type(1) == mixer_type%gambits_diis .and. iscf > 1) then
+   if (mixer%kind(1) == mixer_kind%gambits_diis .and. iscf > 1) then
       call mixer%next_mixer(iscf, wfn, error)
+      call mixer%get_mixer(bas, wfn, error)
       if (allocated(error)) return
-      call mixer%get_mixer(bas, wfn)
    end if
 
    call get_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
 
    call get_mulliken_shell_charges(bas, ints%overlap, wfn%density, wfn%n0sh, &
-   & wfn%qsh)
+      & wfn%qsh)
    call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
 
    call get_mulliken_atomic_multipoles(bas, ints%dipole, wfn%density, &
-   & wfn%dpat)
+      & wfn%dpat)
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
-   & wfn%qpat)
+      & wfn%qpat)
 
-   call mixer%diff_mixer(wfn)
+   call mixer%diff_mixer(wfn, error)
+   if (allocated(error)) return
 
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)

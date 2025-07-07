@@ -34,15 +34,15 @@ module tblite_xtb_singlepoint
    use tblite_output_format, only : format_string
    use tblite_results, only : results_type
    use tblite_scf, only : get_mixer_dimension, new_mixer, new_potential, &
-   next_scf, mixers_type, potential_type, scf_info
+      & next_scf, mixers_type, potential_type, scf_info
    use tblite_scf_solver, only : solver_type
    use tblite_timer, only : timer_type, format_time
    use tblite_wavefunction, only : wavefunction_type, &
-   & get_alpha_beta_occupation, get_density_matrix, &
-   & magnet_to_updown, updown_to_magnet
+      & get_alpha_beta_occupation, get_density_matrix, &
+      & magnet_to_updown, updown_to_magnet
    use tblite_xtb_calculator, only : xtb_calculator
    use tblite_xtb_h0, only : get_selfenergy, get_hamiltonian, get_occupation, &
-   & get_hamiltonian_gradient
+      & get_hamiltonian_gradient
    use tblite_post_processing_type, only : collect_containers_caches
    use tblite_post_processing_list, only : post_processing_list
    implicit none
@@ -68,8 +68,8 @@ contains
 
 
 !> Entry point for performing single point calculation using the xTB calculator
-subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
-& gradient, sigma, verbosity, results, post_process)
+subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, gradient, sigma, &
+      & verbosity, results, post_process)
    !> Calculation context
    type(context_type), intent(inout) :: ctx
    !> Molecular structure data
@@ -96,7 +96,6 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
    integer :: prlevel
    real(wp) :: econv, pconv, cutoff, elast, nel
    real(wp), allocatable :: energies(:), edisp(:), erep(:), exbond(:), eint(:), eelec(:)
-
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), dEdcn(:)
    real(wp), allocatable :: selfenergy(:), dsedcn(:), lattr(:, :), wdensity(:, :, :)
    type(integral_type) :: ints
@@ -125,7 +124,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
    pconv = 2.e-5_wp*accuracy
 
    call ctx%new_solver(solver, calc%bas%nao)
-   
+
    grad = present(gradient) .and. present(sigma)
 
    allocate(energies(mol%nat), source=0.0_wp)
@@ -145,7 +144,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
    else
       if (mol%uhf /= 0) then
          call fatal_error(error, "Total number of electrons ("//format_string(nint(nel), "(i0)")//") and "//&
-         & "number unpaired electrons ("//format_string(mol%uhf, "(i0)")//") is not compatible")
+            & "number unpaired electrons ("//format_string(mol%uhf, "(i0)")//") is not compatible")
          call ctx%set_error(error)
          return
       end if
@@ -219,7 +218,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
 
    allocate(selfenergy(calc%bas%nsh), dsedcn(calc%bas%nsh))
    call get_selfenergy(calc%h0, mol%id, calc%bas%ish_at, calc%bas%nsh_id, cn=cn, &
-   & selfenergy=selfenergy, dsedcn=dsedcn)
+      & selfenergy=selfenergy, dsedcn=dsedcn)
 
    cutoff = get_cutoff(calc%bas, accuracy)
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, lattr)
@@ -232,7 +231,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
 
    call new_integral(ints, calc%bas%nao)
    call get_hamiltonian(mol, lattr, list, calc%bas, calc%h0, selfenergy, &
-   & ints%overlap, ints%dipole, ints%quadrupole, ints%hamiltonian)
+      & ints%overlap, ints%dipole, ints%quadrupole, ints%hamiltonian)
    call timer%pop
 
    call timer%push("scc")
@@ -240,9 +239,12 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
    iscf = 0
    converged = .false.
    info = calc%variable_info()
-
-   call new_mixer(mixers, calc%mixer_info, get_mixer_dimension(mol, calc%bas, info), &
-   & calc%bas%nao, wfn%nspin, ints%overlap, info)
+   call new_mixer(mixers, ctx, calc%mixer_info, get_mixer_dimension(mol, calc%bas, info), &
+      & calc%bas%nao, wfn%nspin, ints%overlap, info, error)
+   if (allocated(error)) then
+      call ctx%set_error(error)
+      return
+   end if
 
    if (prlevel > 0) then
       call ctx%message(repeat("-", 60))
@@ -252,8 +254,8 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
    do while(.not.converged .and. iscf < calc%max_iter)
       elast = sum(eelec)
       call next_scf(iscf, mol, calc%bas, wfn, solver, mixers, &
-      & info, calc%coulomb, calc%dispersion, calc%interactions, ints, pot, &
-      & ccache, dcache, icache, eelec, error)
+         & info, calc%coulomb, calc%dispersion, calc%interactions, ints, &
+         & pot, ccache, dcache, icache, eelec, error)
       econverged = abs(sum(eelec) - elast) < econv
       pconverged = mixers%get_error_mixer(iscf) < pconv
       converged = econverged .and. pconverged
@@ -271,7 +273,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
          exit
       end if
    end do
-   call mixers%cleanup_mixer()
+
    if (prlevel > 0) then
       call ctx%message(repeat("-", 60))
       call ctx%message("")
@@ -289,6 +291,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
       call ctx%message("")
    end if
 
+   call mixers%cleanup_mixer()
    call ctx%delete_solver(solver)
    if (ctx%failed()) return
 
@@ -314,6 +317,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
       call timer%push("hamiltonian")
       allocate(dEdcn(mol%nat))
       dEdcn(:) = 0.0_wp
+
       allocate(wdensity(calc%bas%nao, calc%bas%nao, wfn%nspin))
       do spin = 1, wfn%nspin
          tmp = wfn%focc(:, spin) * wfn%emo(:, spin)
@@ -322,7 +326,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
       call updown_to_magnet(wfn%density)
       call updown_to_magnet(wdensity)
       call get_hamiltonian_gradient(mol, lattr, list, calc%bas, calc%h0, selfenergy, &
-      & dsedcn, pot, wfn%density, wdensity, dEdcn, gradient, sigma)
+         & dsedcn, pot, wfn%density, wdensity, dEdcn, gradient, sigma)
       call magnet_to_updown(wfn%density)
 
       if (allocated(dcndr)) then
@@ -349,7 +353,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
    if (present(results)) then
       if (allocated(results%dict)) deallocate(results%dict)
       allocate(results%dict)
-      if (present(post_process)) then
+      if (present(post_process)) then 
          call post_process%pack_res(mol, results)
          if (prlevel > 1) call results%dict%dump("post_processing.toml", error)
       end if
@@ -364,8 +368,8 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
       integer :: it
       real(wp) :: ttime, stime
       character(len=*), parameter :: label(*) = [character(len=20):: &
-      & "repulsion", "halogen", "dispersion", "interactions", &
-      & "coulomb", "hamiltonian", "post processing", "scc"]
+         & "repulsion", "halogen", "dispersion", "interactions", &
+         & "coulomb", "hamiltonian", "post processing", "scc"]
       if (prlevel > 0) then
          ttime = timer%get("total")
          call ctx%message(" total:"//repeat(" ", 16)//format_time(ttime))
@@ -375,7 +379,7 @@ subroutine xtb_singlepoint(ctx, mol, calc, wfn, accuracy, energy, &
             stime = timer%get(label(it))
             if (stime <= epsilon(0.0_wp)) cycle
             call ctx%message(" - "//label(it)//format_time(stime) &
-            & //" ("//format_string(int(stime/ttime*100), '(i3)')//"%)")
+               & //" ("//format_string(int(stime/ttime*100), '(i3)')//"%)")
          end do
          call ctx%message("")
       end if

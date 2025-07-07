@@ -71,19 +71,19 @@ subroutine new_broyden(self, ndim, input)
    type(mixer_input), intent(in) :: input
 
    self%ndim = ndim
-   self%memory = input%memory(input%type)
+   self%memory = input%memory(input%kind)
    self%iter = 0
    self%iset = 0
    self%idif = 0
    self%iget = 0
    self%damp = input%damp
-   allocate(self%df(ndim, input%memory(input%type)))
-   allocate(self%u(ndim, input%memory(input%type)))
-   allocate(self%a(input%memory(input%type), input%memory(input%type)))
+   allocate(self%df(ndim, input%memory(input%kind)))
+   allocate(self%u(ndim, input%memory(input%kind)))
+   allocate(self%a(input%memory(input%kind), input%memory(input%kind)))
    allocate(self%dq(ndim))
    allocate(self%dqlast(ndim))
    allocate(self%qlast_in(ndim))
-   allocate(self%omega(input%memory(input%type)))
+   allocate(self%omega(input%memory(input%kind)))
    allocate(self%q_in(ndim))
 
 end subroutine new_broyden
@@ -107,7 +107,7 @@ subroutine diff_1d(self, qvec)
    real(wp), intent(in) :: qvec(:)
 
    self%dq(self%idif+1:self%idif+size(qvec)) = qvec &
-   & - self%q_in(self%idif+1:self%idif+size(qvec))
+      & - self%q_in(self%idif+1:self%idif+size(qvec))
    self%idif = self%idif + size(qvec)
 end subroutine diff_1d
 
@@ -129,9 +129,11 @@ subroutine next(self, iscf, wfn, error)
    self%iget = 0
    self%iter = self%iter + 1
    call broyden(self%ndim, self%q_in, self%qlast_in, self%dq, self%dqlast, &
-   & self%iter, self%memory, self%damp, self%omega, self%df, self%u, self%a, info)
+      & self%iter, self%memory, self%damp, self%omega, self%df, self%u, self%a, info)
    if (info /= 0) then
-      call fatal_error(error, "Broyden mixing failed to obtain next iteration")
+      allocate(error)
+      error%stat = 1
+      error%message = "Broyden mixer failed to obtain next iteration"
    end if
 end subroutine next
 
@@ -237,7 +239,6 @@ subroutine broyden(n, q, qlast, dq, dqlast, iter, memory, alpha, omega, df, u, a
       i = mod(j - 1, memory) + 1
       q(:) = q - omega(i) * c(i, 1) * u(:, i)
    end do
-
 end subroutine broyden
 
 subroutine lineq(a, c, info)
