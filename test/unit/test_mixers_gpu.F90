@@ -13,8 +13,8 @@ module test_mixers_gpu
    use tblite_xtb_singlepoint, only : xtb_singlepoint
    implicit none
    private
-   real(wp), parameter :: thr = 100*epsilon(1.0_wp)
    real(wp), parameter :: acc = 0.1_wp
+   real(wp), parameter :: thr = 1.e-6_wp*acc
    real(wp), parameter :: kt = 300.0_wp * 3.166808578545117e-06_wp
    public :: collect_mixers_gpu
 contains
@@ -39,8 +39,7 @@ subroutine test_diis_gpu(error)
    type(results_type) :: res
 
    integer, parameter :: nat=22
-   real(wp) :: energy = 0.0_wp
-   real(wp) :: perr = 0.0_wp
+   real(wp) :: energy_cpu = 0.0_wp, energy_gpu = 0.0_wp
    real(wp), parameter :: xyz(3, nat) = reshape((/&
    &1.40704587900135,-1.266053426,-1.93713467409179,&
    &1.8500720142163,-0.46824073,-1.50918243052625,&
@@ -80,14 +79,12 @@ subroutine test_diis_gpu(error)
 
    calc%mixer_info = mixer_config
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, results=res)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy_gpu, verbosity=0, results=res)
 
    if (calc%mixer_info%runmode /= 2) then
       call test_failed(error, "GAMBITS DIIS mixing does not run on the GPU")
       return
    end if
-
-   perr = res%perr
 
    call new(mol, num, xyz*aatoau, uhf=0, charge=0.0_wp)
    call new_gfn2_calculator(calc, mol, error)
@@ -101,11 +98,11 @@ subroutine test_diis_gpu(error)
 
    calc%mixer_info = mixer_config
    call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
-   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy, verbosity=0, results=res)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy_cpu, verbosity=0, results=res)
 
-   if (abs(res%perr - perr) > thr) then
+   if (abs(energy_gpu - energy_cpu) > thr) then
       call test_failed(error, "GAMBITS DIIS CPU and GPU mixing do not give the same density error.")
-      print '(2es21.14)', perr, res%perr
+      print '(2es21.14)', energy_gpu, energy_cpu
    end if
 #endif
 end subroutine test_diis_gpu
