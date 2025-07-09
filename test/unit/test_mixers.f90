@@ -216,7 +216,8 @@ subroutine test_diis_odd_electrons(error)
    call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy_gambits, verbosity=0, results=res)
 
    if (abs(energy_native - energy_gambits) > thr) then
-      call test_failed(error, "GAMBITS DIIS mixing does not give the same energy as native Broyden mixing for an odd number of electrons.")
+      call test_failed(error, "GAMBITS DIIS mixing does not give the same energy as native Broyden mixing &
+         & for an odd number of electrons.")
       print '(2es21.14)', energy_gambits, energy_native
       write(*,*) "Energy difference:", abs(energy_gambits - energy_native)
    end if
