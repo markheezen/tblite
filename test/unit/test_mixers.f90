@@ -25,7 +25,8 @@ subroutine collect_mixers(testsuite)
 
    testsuite = [ &
       new_unittest("mixers-broyden", test_broyden),&
-      new_unittest("test-diis-cpu", test_diis_cpu)]
+      new_unittest("test-diis-cpu", test_diis_cpu),&
+      new_unittest("test-diis-odd-electrons", test_diis_odd_electrons)]
 
 end subroutine collect_mixers
 
@@ -152,5 +153,74 @@ subroutine test_diis_cpu(error)
    end if
 
 end subroutine test_diis_cpu
+
+subroutine test_diis_odd_electrons(error)
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+   type(context_type) :: ctx
+   type(structure_type) :: mol
+   type(xtb_calculator) :: calc
+   type(wavefunction_type) :: wfn
+   type(mixer_input) :: mixer_config
+   type(results_type) :: res
+
+   integer, parameter :: nat=22
+   real(wp) :: energy_native = 0.0_wp, energy_gambits = 0.0_wp
+   real(wp), parameter :: xyz(3, nat) = reshape((/&
+   &1.40704587900135,-1.266053426,-1.93713467409179,&
+   &1.8500720142163,-0.46824073,-1.50918243052625,&
+   &-0.03362432546857,-1.392692458,-1.74003582842655,&
+   &-0.56857010176787,-1.017644449,-2.61263468250045,&
+   &-0.44096297533149,-2.843378101,-1.4889973466575,&
+   &-0.47991761435962,-0.552309546,-0.55520223211488,&
+   &-1.51566046566003,-2.891873561,-1.32273881899144,&
+   &-0.18116520826015,-3.451878075,-2.34920432497853,&
+   &0.06989722371032,-3.232990003,-0.60872832970057,&
+   &-1.56668254604022,0.00552121,-0.52884675232746,&
+   &1.99245341935793,-1.73097166,-3.08869240465405,&
+   &3.42884245712259,-1.306600699,-3.28712667180899,&
+   &3.8772196423657,-0.888431234,-2.38921454082853,&
+   &3.4654854727687,-0.564953085,-4.0831179008844,&
+   &4.00253375919125,-2.169709391,-3.61210069945494,&
+   &1.40187969243713,-2.438261129,-3.89034129099619,&
+   &0.40869198564818,-0.491017096,0.47992425165481,&
+   &1.15591901840578,-1.165248428,0.48740266863377,&
+   &0.00723492497865,0.116922762,1.73426298331318,&
+   &0.88822128835955,0.28499002,2.34645659039969,&
+   &-0.47231557974936,1.067376345,1.52286683213051,&
+   &-0.70199988222212,-0.504859383,2.28058248842892&
+   &/),shape=(/3,nat/))
+   integer, parameter :: num(nat) = (/7,1,6,1,6,6,1,1,1,8,6,6,1,1,1,8,7,1,6,1,1,1/)
+
+   call new(mol, num, xyz*aatoau, uhf=1, charge=-1.0_wp)
+   call new_gfn2_calculator(calc, mol, error)
+   
+   mixer_config%kind = mixer_kind%broyden
+   mixer_config%memory = 250
+   mixer_config%nao = calc%bas%nao
+   mixer_config%prec = mixer_precision%double
+   mixer_config%damp = 0.4_wp
+
+   calc%mixer_info = mixer_config
+   call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy_native, verbosity=0, results=res)
+
+   call new(mol, num, xyz*aatoau, uhf=1, charge=-1.0_wp)
+   call new_gfn2_calculator(calc, mol, error)
+   
+   mixer_config%kind = mixer_kind%gambits_diis
+   mixer_config%memory = 5
+   mixer_config%prec = mixer_precision%double
+   calc%mixer_info = mixer_config
+   call new_wavefunction(wfn, mol%nat, calc%bas%nsh, calc%bas%nao, 1, kt)
+   call xtb_singlepoint(ctx, mol, calc, wfn, acc, energy_gambits, verbosity=0, results=res)
+
+   if (abs(energy_native - energy_gambits) > thr) then
+      call test_failed(error, "GAMBITS DIIS mixing does not give the same energy as native Broyden mixing for an odd number of electrons.")
+      print '(2es21.14)', energy_gambits, energy_native
+      write(*,*) "Energy difference:", abs(energy_gambits - energy_native)
+   end if
+
+end subroutine test_diis_odd_electrons
 
 end module test_mixers
