@@ -26,26 +26,25 @@ module tblite_scf_iterator
    use tblite_disp, only : dispersion_type
    use tblite_integral_type, only : integral_type
    use tblite_wavefunction_type, only : wavefunction_type
-   use tblite_wavefunction_fermi, only : get_fermi_filling
    use tblite_wavefunction_mulliken, only : get_mulliken_shell_charges, &
-      & get_mulliken_atomic_multipoles
+   & get_mulliken_atomic_multipoles
    use tblite_xtb_coulomb, only : tb_coulomb
-   use tblite_scf_mixer, only : mixer_type
+   use tblite_scf_mixer_input, only : mixer_kind
+   use tblite_scf_mixer_type, only : mixers_type
    use tblite_scf_info, only : scf_info
    use tblite_scf_potential, only : potential_type, add_pot_to_h1
+   use tblite_scf_utils, only : next_density, get_electronic_energy, reduce, get_qat_from_qsh
    use tblite_scf_solver, only : solver_type
    implicit none
    private
 
-   public :: next_scf, get_mixer_dimension, get_electronic_energy, reduce
-   public :: next_density, get_qat_from_qsh
+   public :: next_scf
 
 contains
 
 !> Evaluate self-consistent iteration for the density-dependent Hamiltonian
 subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersion, &
-      & interactions, ints, pot, ccache, dcache, icache, &
-      & energies, error)
+      & interactions, ints, pot, ccache, dcache, icache, energies, error)
    !> Current iteration count
    integer, intent(inout) :: iscf
    !> Molecular structure data
@@ -57,7 +56,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    !> Solver for the general eigenvalue problem
    class(solver_type), intent(inout) :: solver
    !> Convergence accelerator
-   class(mixer_type), intent(inout) :: mixer
+   class(mixers_type), intent(inout) :: mixer
    !> Information on wavefunction data used to construct Hamiltonian
    type(scf_info), intent(in) :: info
    !> Container for coulombic interactions
@@ -87,10 +86,10 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    real(wp), allocatable :: eao(:)
    real(wp) :: ts
 
-   if (iscf > 0) then
-      call mixer%next(error)
+   if (iscf > 0 .and. (mixer%kind(1) == mixer_kind%broyden .or. mixer%kind(1) == mixer_kind%gambits_broyden)) then
+      call mixer%next_mixer(iscf, wfn, error)
+      call mixer%get_mixer(bas, wfn, error)
       if (allocated(error)) return
-      call get_mixer(mixer, bas, wfn, info)
    end if
 
    iscf = iscf + 1
@@ -106,7 +105,13 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    end if
    call add_pot_to_h1(bas, ints, pot, wfn%coeff)
 
-   call set_mixer(mixer, wfn, info)
+   call mixer%set_mixer(wfn)
+
+   if (mixer%kind(1) == mixer_kind%gambits_diis .and. iscf > 1) then
+      call mixer%next_mixer(iscf, wfn, error)
+      call mixer%get_mixer(bas, wfn, error)
+      if (allocated(error)) return
+   end if
 
    call next_density(wfn, solver, ints, ts, error)
    if (allocated(error)) return
@@ -120,7 +125,8 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   call diff_mixer(mixer, wfn, info)
+   call mixer%diff_mixer(wfn, error)
+   if (allocated(error)) return
 
    allocate(eao(bas%nao), source=0.0_wp)
    call get_electronic_energy(ints%hamiltonian, wfn%density, eao)
@@ -137,189 +143,5 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
       call interactions%get_energy(mol, icache, wfn, energies)
    end if
 end subroutine next_scf
-
-
-subroutine get_electronic_energy(h0, density, energies)
-   real(wp), intent(in) :: h0(:, :)
-   real(wp), intent(in) :: density(:, :, :)
-   real(wp), intent(inout) :: energies(:)
-
-   integer :: iao, jao, spin
-
-   !$omp parallel do collapse(3) schedule(runtime) default(none) &
-   !$omp reduction(+:energies) shared(h0, density) private(spin, iao, jao)
-   do spin = 1, size(density, 3)
-      do iao = 1, size(density, 2)
-         do jao = 1, size(density, 1)
-            energies(iao) = energies(iao) + h0(jao, iao) * density(jao, iao, spin)
-         end do
-      end do
-   end do
-end subroutine get_electronic_energy
-
-
-subroutine reduce(reduced, full, map)
-   real(wp), intent(inout) :: reduced(:)
-   real(wp), intent(in) :: full(:)
-   integer, intent(in) :: map(:)
-
-   integer :: ix
-
-   do ix = 1, size(map)
-      reduced(map(ix)) = reduced(map(ix)) + full(ix)
-   end do
-end subroutine reduce
-
-
-subroutine get_qat_from_qsh(bas, qsh, qat)
-   type(basis_type), intent(in) :: bas
-   real(wp), intent(in) :: qsh(:, :)
-   real(wp), intent(out) :: qat(:, :)
-
-   integer :: ish, ispin
-
-   qat(:, :) = 0.0_wp
-   !$omp parallel do schedule(runtime) collapse(2) default(none) &
-   !$omp reduction(+:qat) shared(bas, qsh) private(ish)
-   do ispin = 1, size(qsh, 2)
-      do ish = 1, size(qsh, 1)
-         qat(bas%sh2at(ish), ispin) = qat(bas%sh2at(ish), ispin) + qsh(ish, ispin)
-      end do
-   end do
-end subroutine get_qat_from_qsh
-
-
-function get_mixer_dimension(mol, bas, info) result(ndim)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
-   type(structure_type), intent(in) :: mol
-   type(basis_type), intent(in) :: bas
-   type(scf_info), intent(in) :: info
-   integer :: ndim
-
-   ndim = 0
-
-   select case(info%charge)
-   case(atom_resolved)
-      ndim = ndim + mol%nat
-   case(shell_resolved)
-      ndim = ndim + bas%nsh
-   end select
-
-   select case(info%dipole)
-   case(atom_resolved)
-      ndim = ndim + 3*mol%nat
-   end select
-
-   select case(info%quadrupole)
-   case(atom_resolved)
-      ndim = ndim + 6*mol%nat
-   end select
-end function get_mixer_dimension
-
-subroutine set_mixer(mixer, wfn, info)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
-   class(mixer_type), intent(inout) :: mixer
-   type(wavefunction_type), intent(in) :: wfn
-   type(scf_info), intent(in) :: info
-
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%set(wfn%qat)
-   case(shell_resolved)
-      call mixer%set(wfn%qsh)
-   end select
-
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%set(wfn%dpat)
-   end select
-
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%set(wfn%qpat)
-   end select
-end subroutine set_mixer
-
-subroutine diff_mixer(mixer, wfn, info)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
-   class(mixer_type), intent(inout) :: mixer
-   type(wavefunction_type), intent(in) :: wfn
-   type(scf_info), intent(in) :: info
-
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%diff(wfn%qat)
-   case(shell_resolved)
-      call mixer%diff(wfn%qsh)
-   end select
-
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%diff(wfn%dpat)
-   end select
-
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%diff(wfn%qpat)
-   end select
-end subroutine diff_mixer
-
-subroutine get_mixer(mixer, bas, wfn, info)
-   use tblite_scf_info, only : atom_resolved, shell_resolved
-   class(mixer_type), intent(inout) :: mixer
-   type(basis_type), intent(in) :: bas
-   type(wavefunction_type), intent(inout) :: wfn
-   type(scf_info), intent(in) :: info
-
-   select case(info%charge)
-   case(atom_resolved)
-      call mixer%get(wfn%qat)
-   case(shell_resolved)
-      call mixer%get(wfn%qsh)
-      call get_qat_from_qsh(bas, wfn%qsh, wfn%qat)
-   end select
-
-   select case(info%dipole)
-   case(atom_resolved)
-      call mixer%get(wfn%dpat)
-   end select
-
-   select case(info%quadrupole)
-   case(atom_resolved)
-      call mixer%get(wfn%qpat)
-   end select
-end subroutine get_mixer
-
-
-subroutine next_density(wfn, solver, ints, ts, error)
-   !> Tight-binding wavefunction data
-   type(wavefunction_type), intent(inout) :: wfn
-   !> Solver for the general eigenvalue problem
-   class(solver_type), intent(inout) :: solver
-   !> Integral container
-   type(integral_type), intent(in) :: ints
-   !> Electronic entropy
-   real(wp), intent(out) :: ts
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   real(wp) :: e_fermi, stmp(2)
-   real(wp), allocatable :: focc(:)
-   integer :: spin
-
-   call solver%get_density(wfn%coeff, ints%overlap, wfn%emo, wfn%focc, wfn%density, error)
-   do spin = 1, 2
-      call get_electronic_entropy(wfn%focc(:, spin), wfn%kt, stmp(spin))
-   end do
-   ts = sum(stmp)
-end subroutine next_density
-
-subroutine get_electronic_entropy(occ, kt, s)
-   real(wp), intent(in) :: occ(:)
-   real(wp), intent(in) :: kt
-   real(wp), intent(out) :: s
-
-   s = sum(log(occ ** occ * (1 - occ) ** (1 - occ))) * kt
-end subroutine get_electronic_entropy
 
 end module tblite_scf_iterator
