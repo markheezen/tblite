@@ -64,6 +64,10 @@ jobs:
           build-type: debug
           toolchain: {compiler: gcc, version: '12', build: fpm}
 
+        - os: macos-latest
+          build-type: debug
+          toolchain: {compiler: gcc, version: '15', build: cmake}
+
         # - os: windows-latest
         #   build: meson
         #   build-type: debug
@@ -146,20 +150,28 @@ jobs:
 
     - name: Setup environment for Fortran and C compilers
       run: |
-        if [ ! -n "$FC" ]; then
-          if [ "${{ matrix.toolchain.compiler }}" = "gcc" ]; then
-            FC="gfortran"
-            CC="gcc"
-          elif [ "${{ matrix.toolchain.compiler }}" = "intel" ]; then
-            FC="ifx"
-            CC="icx"
-          elif [ "${{ matrix.toolchain.compiler }}" = "intel-classic" ]; then
-            FC="ifort"
-            CC="icc"
-          fi
-          echo "FC=$FC" >> $GITHUB_ENV
-          echo "CC=$CC" >> $GITHUB_ENV
+        if [ "${{ matrix.toolchain.compiler }}" = "gcc" ] && [ "${{ matrix.os }}" = "macos-latest" ]; then
+          FC="gfortran-${{ matrix.toolchain.version }}"
+          CC="gcc-${{ matrix.toolchain.version }}"
+          CXX="g++-${{ matrix.toolchain.version }}"
+        elif [ "${{ matrix.toolchain.compiler }}" = "gcc" ]; then
+          FC="gfortran"
+          CC="gcc"
+          CXX="g++"
+        elif [ "${{ matrix.toolchain.compiler }}" = "intel" ]; then
+          FC="ifx"
+          CC="icx"
+          CXX="icpx"
+        elif [ "${{ matrix.toolchain.compiler }}" = "intel-classic" ]; then
+          sudo apt-get install -y gcc-10 gfortran-10 g++-10
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-10 --slave /usr/bin/gcov gcov /usr/bin/gcov-10 --slave /usr/bin/g++ g++ /usr/bin/g++-10
+          FC="ifort"
+          CC="icc"
+          CXX="icpc"
         fi
+        echo "FC=$FC" >> $GITHUB_ENV
+        echo "CC=$CC" >> $GITHUB_ENV
+        echo "CXX=$CXX" >> $GITHUB_ENV
 
     - name: Install build and test dependencies
       if: ${{ ! contains(matrix.os, 'windows') }}
@@ -194,12 +206,15 @@ jobs:
     - name: Build library (fpm)
       if: ${{ matrix.toolchain.build == 'fpm' }}
       run: |
+        export FPM_CXXFLAGS="-DNETLIB_HEADER -std=c++17"
+        echo "FPM_CXXFLAGS=$FPM_CXXFLAGS" >> $GITHUB_ENV
         fpm --version
         fpm build
 
     - name: Build library
       if: ${{ matrix.toolchain.build != 'fpm' }}
-      run: ninja -C ${{ env.BUILD_DIR }}
+      run: |
+        ninja -C ${{ env.BUILD_DIR }}
 
     - name: Run unit tests (fpm)
       if: ${{ matrix.toolchain.build == 'fpm' }}
@@ -232,8 +247,9 @@ jobs:
 
     - name: Run unit tests (ctest)
       if: ${{ matrix.toolchain.build == 'cmake' }}
-      run: |
+      run: | #test/unit/tblite-tester
          ctest --output-on-failure --parallel 2 -R '^tblite/'
+         
       working-directory: ${{ env.BUILD_DIR }}
       env:
         OMP_NUM_THREADS: 1,2,1
