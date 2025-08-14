@@ -17,7 +17,6 @@
 set(_lib "gambits")
 set(_pkg "GAMBITS")
 set(_url "https://git.rwth-aachen.de/bannwarthlab/gambits")
-set(_rev "v0.1.0")
 
 if(NOT DEFINED "${_pkg}_FIND_METHOD")
   if(DEFINED "${PROJECT_NAME}-dependency-method")
