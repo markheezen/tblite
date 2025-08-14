@@ -23,3 +23,9 @@ The built-in parameters can be exported using the `tblite-param`_ command.
 For more information on the format of the parameter file see the :ref:`parameter specification <parameter>`.
 
 .. _tblite-param: https://github.com/awvwgk/tblite/blob/main/man/tblite-param.1.adoc
+
+Convergence accelerating (mixing)
+================
+
+The library uses Broyden mixing as default convergence acclerator. Via GAMBITS\ :footcite:`GAMBITS` DIIS (Direct Inversion in the Iterative Subspace) is available on both the CPU and GPU. 
+This can be invoked via ``--mixer gambits-diis`` (Broyden is also available via GAMBITS through ``--mixer gambits-broyden``).     
