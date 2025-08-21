@@ -27,6 +27,7 @@ if fc_id == 'gcc'
     '-ffree-line-length-none',
     '-fbacktrace',
     '-Wno-maybe-uninitialized',
+    '-std=c++17',
     language: 'fortran',
   )
   if fc.version().version_compare('<10')
@@ -163,6 +164,6 @@ gambits_dep = dependency(
   'gambits',
   version: '>=0.0.0',
   fallback: ['gambits','gambits_dep'],
-  default_options: ['default_library=static','api_fortran=true','-std=c++17'],
+  default_options: ['default_library=static','api_fortran=true'],
 )
 lib_deps += gambits_dep
