@@ -3,7 +3,7 @@ requires = [
   "meson-python",
   "cffi",
   "setuptools",
-  "meson==1.8.3",
+  "meson!=1.8.0,!=1.8.4",
 ]
 build-backend = "mesonpy"
 
