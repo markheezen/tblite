@@ -163,6 +163,6 @@ gambits_dep = dependency(
   'gambits',
   version: '>=0.0.0',
   fallback: ['gambits','gambits_dep'],
-  default_options: ['default_library=static','api_fortran=true'],
+  default_options: ['default_library=static','api_fortran=true','-std=c++17'],
 )
 lib_deps += gambits_dep
