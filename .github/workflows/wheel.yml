@@ -28,6 +28,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libblas-dev liblapack-dev libopenblas-dev
     - run: |
+        export CPPFLAGS="-I/usr/include/x86_64-linux-gnu $CPPFLAGS"
+        export LDFLAGS="-L/usr/lib/x86_64-linux-gnu $LDFLAGS"
         meson setup _build
         meson dist -C _build --no-tests --include-subprojects
         mv _build/meson-dist/*.tar.xz .
@@ -61,6 +63,8 @@ jobs:
         git config user.name "dummy"
         git subtree add --prefix python/subprojects/tblite . HEAD
     - run: |
+        export CPPFLAGS="-I/usr/include/x86_64-linux-gnu $CPPFLAGS"
+        export LDFLAGS="-L/usr/lib/x86_64-linux-gnu $LDFLAGS"
         python -m build python/ --sdist --outdir . -n 
     - uses: actions/upload-artifact@v4
       with:
