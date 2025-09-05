@@ -125,7 +125,7 @@ subroutine next_scf(iscf, mol, bas, wfn, solver, mixer, info, coulomb, dispersio
    call get_mulliken_atomic_multipoles(bas, ints%quadrupole, wfn%density, &
       & wfn%qpat)
 
-   call mixer%diff_mixer(wfn, error)
+   call mixer%diff_mixer(iscf, wfn, error)
    if (allocated(error)) return
 
    allocate(eao(bas%nao), source=0.0_wp)

@@ -313,9 +313,11 @@ subroutine set_mixer(self, wfn)
    end do
 end subroutine set_mixer
 
-subroutine diff_mixer(self, wfn, error)
+subroutine diff_mixer(self, iscf, wfn, error)
    !> Instance of the electronic mixer
    class(mixers_type), intent(inout) :: self
+   !> Iteration counter
+   integer, intent(in) :: iscf
    !> Tight-binding wavefunction data
    type(wavefunction_type), intent(in) :: wfn
    !> Error handling
@@ -324,6 +326,8 @@ subroutine diff_mixer(self, wfn, error)
    integer :: channel
 
    do channel = 1, size(self%mixer)
+      if (self%kind(channel) == mixer_kind%gambits_diis .and. iscf > 1) cycle
+      
       select case(self%mixer(channel)%info%charge)
          case(atom_resolved)
          call self%mixer(channel)%diff(wfn%qat)
