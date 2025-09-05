@@ -26,7 +26,7 @@ jobs:
     - name: Install LAPACK
       run: |
         sudo apt-get update
-        sudo apt-get install -y liblapack-dev
+        sudo apt-get install -y liblapack-dev libopenblas-dev
     - run: |
         meson setup _build
         meson dist -C _build --no-tests --include-subprojects
