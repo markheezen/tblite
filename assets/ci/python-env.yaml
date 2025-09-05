@@ -16,4 +16,5 @@ dependencies:
   - matplotlib-base
   - meson!=1.8.0,!=1.8.4
   - setuptools
+  - openblas
   - libcblas
